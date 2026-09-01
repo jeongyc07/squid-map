@@ -30,7 +30,12 @@
         .form-group input, .form-group textarea { 
             width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; 
         }
-        .form-group textarea { resize: vertical; height: 100px; }
+        .form-group textarea { resize: vertical; height: 120px; }
+
+        /* 음력 변환 정보 표시 스타일 */
+        #lunar-display {
+            font-size: 12px; color: #27ae60; background: #e8f8f5; padding: 8px; border-radius: 4px; margin-top: 5px; font-weight: bold;
+        }
 
         .save-btn { 
             width: 100%; background: #3498db; color: white; border: none; padding: 12px; 
@@ -40,12 +45,14 @@
         .save-btn:hover { background: #2980b9; }
 
         @media (max-width: 768px) {
-            #record-panel { width: 100%; } /* 모바일에서는 전체 화면 크기로 유연하게 조절 */
+            #record-panel { width: 100%; }
         }
     </style>
 
     <!-- 카카오 지도 SDK -->
     <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=9f9339f1c455ac084a23d987ceb30e56"></script>
+    <!-- 음력 변환을 위한 라이브러리 (Korean Lunar Calendar) -->
+    <script src="https://cdn.jsdelivr.net/npm/korean-lunar-calendar@0.3.3/lib/KoreanLunarCalendar.min.js"></script>
 </head>
 <body>
 
@@ -61,20 +68,14 @@
             </div>
             
             <div class="form-group">
-                <label>선택한 위치 좌표</label>
-                <input type="text" id="coord-input" readonly style="background:#f8f9fa; color:#666;">
+                <label>날짜 선택</label>
+                <input type="date" id="record-date" onchange="updateLunarDate()">
+                <div id="lunar-display">음력 변환 중...</div>
             </div>
-            <div class="form-group">
-                <label>포인트 이름 / 장소명</label>
-                <input type="text" id="point-name" placeholder="예: ○○방파제 갯바위">
-            </div>
-            <div class="form-group">
-                <label>날짜</label>
-                <input type="date" id="record-date">
-            </div>
+
             <div class="form-group">
                 <label>조과 및 채비 메모</label>
-                <textarea id="record-memo" placeholder="예: 3마리 포획 (대포알 사이즈), 3호 에기 금테, 조류 속도 좋음"></textarea>
+                <textarea id="record-memo" placeholder="예: 3마리 포획 (대포알 사이즈), 3호 에기 금테, 물때 좋음"></textarea>
             </div>
             <button class="save-btn" onclick="saveRecord()">조과 기록 저장하기</button>
         </div>
@@ -83,6 +84,7 @@
     <script>
         let map, currentMarker = null;
         let selectedLat = null, selectedLng = null;
+        const calendar = new KoreanLunarCalendar();
 
         document.addEventListener("DOMContentLoaded", function() {
             if (typeof kakao === 'undefined' || !kakao.maps) {
@@ -103,20 +105,18 @@
             map.addControl(new kakao.maps.MapTypeControl(), kakao.maps.ControlPosition.TOPLEFT);
             map.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT);
 
-            // 오늘 날짜 기본 세팅
-            document.getElementById('record-date').value = new Date().toISOString().split('T')[0];
+            // 오늘 날짜 세팅 및 음력 계산
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('record-date').value = today;
+            updateLunarDate();
 
             // 지도 클릭 이벤트
             kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
                 const latlng = mouseEvent.latLng;
                 selectedLat = latlng.getLat();
                 selectedLng = latlng.getLng();
-
-                // 좌표 입력창에 값 표시
-                document.getElementById('coord-input').value = `위도: ${selectedLat.toFixed(4)}, 경도: ${selectedLng.toFixed(4)}`;
                 
-                // 입력 필드 초기화
-                document.getElementById('point-name').value = '';
+                // 메모 입력란 초기화
                 document.getElementById('record-memo').value = '';
 
                 // 마커 표시
@@ -128,6 +128,25 @@
                 openPanel();
             });
         });
+
+        // 양력을 입력받아 음력으로 변환하여 표시하는 함수
+        function updateLunarDate() {
+            const dateVal = document.getElementById('record-date').value;
+            if (!dateVal) return;
+
+            const [year, month, day] = dateVal.split('-').map(Number);
+            
+            try {
+                calendar.setSolarDate(year, month, day);
+                const lunar = calendar.getLunarCalendar();
+                const leapStr = lunar.isLeapMonth ? " (윤달)" : "";
+                
+                document.getElementById('lunar-display').innerText = 
+                    `📅 양력: ${year}년 ${month}월 ${day}일\n🌙 음력: ${lunar.year}년 ${lunar.month}월 ${lunar.day}일${leapStr}`;
+            } catch (e) {
+                document.getElementById('lunar-display').innerText = "음력 변환 오류";
+            }
+        }
 
         function openPanel() {
             const panel = document.getElementById('record-panel');
@@ -144,17 +163,11 @@
         }
 
         function saveRecord() {
-            const name = document.getElementById('point-name').value.trim();
             const date = document.getElementById('record-date').value;
+            const lunarText = document.getElementById('lunar-display').innerText;
             const memo = document.getElementById('record-memo').value.trim();
 
-            if (!name) {
-                alert("포인트 이름을 입력해주세요!");
-                return;
-            }
-
-            // 임시 저장 확인 메시지
-            alert(`[${name}] 포인트 조과가 기록되었습니다!\n- 날짜: ${date}\n- 메모: ${memo || "없음"}`);
+            alert(`[조과 기록 완료]\n- ${date}\n- ${lunarText.replace('\n', ' / ')}\n- 메모: ${memo || "없음"}`);
             closePanel();
         }
     </script>
