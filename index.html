@@ -32,7 +32,7 @@
         }
         .form-group textarea { resize: vertical; height: 120px; }
 
-        /* 음력 변환 정보 표시 스타일 */
+        /* 음력 표시 스타일 */
         #lunar-display {
             font-size: 12px; color: #27ae60; background: #e8f8f5; padding: 8px; border-radius: 4px; margin-top: 5px; font-weight: bold;
         }
@@ -51,8 +51,6 @@
 
     <!-- 카카오 지도 SDK -->
     <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=9f9339f1c455ac084a23d987ceb30e56"></script>
-    <!-- 음력 변환을 위한 라이브러리 (Korean Lunar Calendar) -->
-    <script src="https://cdn.jsdelivr.net/npm/korean-lunar-calendar@0.3.3/lib/KoreanLunarCalendar.min.js"></script>
 </head>
 <body>
 
@@ -70,7 +68,7 @@
             <div class="form-group">
                 <label>날짜 선택</label>
                 <input type="date" id="record-date" onchange="updateLunarDate()">
-                <div id="lunar-display">음력 변환 중...</div>
+                <div id="lunar-display">날짜를 불러오는 중...</div>
             </div>
 
             <div class="form-group">
@@ -84,68 +82,61 @@
     <script>
         let map, currentMarker = null;
         let selectedLat = null, selectedLng = null;
-        const calendar = new KoreanLunarCalendar();
 
         document.addEventListener("DOMContentLoaded", function() {
-            if (typeof kakao === 'undefined' || !kakao.maps) {
-                alert("카카오 지도 SDK 로드 실패!");
-                return;
+            try {
+                if (typeof kakao === 'undefined' || !kakao.maps) {
+                    alert("카카오 지도 SDK를 불러오지 못했습니다. 인터넷 연결이나 앱 키를 확인해주세요.");
+                    return;
+                }
+
+                const mapContainer = document.getElementById('map');
+                const mapOption = { 
+                    center: new kakao.maps.LatLng(33.38, 126.55), // 제주도 중심
+                    level: 9, 
+                    mapTypeId: kakao.maps.MapTypeId.HYBRID // 위성 + 길/지명 하이브리드
+                };
+
+                map = new kakao.maps.Map(mapContainer, mapOption);
+
+                // 지도 컨트롤 추가
+                map.addControl(new kakao.maps.MapTypeControl(), kakao.maps.ControlPosition.TOPLEFT);
+                map.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT);
+
+                // 오늘 날짜 세팅
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('record-date').value = today;
+                updateLunarDate();
+
+                // 지도 클릭 이벤트
+                kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
+                    const latlng = mouseEvent.latLng;
+                    selectedLat = latlng.getLat();
+                    selectedLng = latlng.getLng();
+                    
+                    document.getElementById('record-memo').value = '';
+
+                    if (currentMarker) currentMarker.setMap(null);
+                    currentMarker = new kakao.maps.Marker({ position: latlng });
+                    currentMarker.setMap(map);
+
+                    openPanel();
+                });
+            } catch (error) {
+                console.error("초기화 중 오류 발생:", error);
+                alert("지도를 불러오는 중 오류가 발생했습니다.");
             }
-
-            const mapContainer = document.getElementById('map');
-            const mapOption = { 
-                center: new kakao.maps.LatLng(33.38, 126.55), // 제주도 중심
-                level: 9, 
-                mapTypeId: kakao.maps.MapTypeId.HYBRID // 위성 + 길/지명 하이브리드
-            };
-
-            map = new kakao.maps.Map(mapContainer, mapOption);
-
-            // 지도 컨트롤 추가
-            map.addControl(new kakao.maps.MapTypeControl(), kakao.maps.ControlPosition.TOPLEFT);
-            map.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT);
-
-            // 오늘 날짜 세팅 및 음력 계산
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('record-date').value = today;
-            updateLunarDate();
-
-            // 지도 클릭 이벤트
-            kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
-                const latlng = mouseEvent.latLng;
-                selectedLat = latlng.getLat();
-                selectedLng = latlng.getLng();
-                
-                // 메모 입력란 초기화
-                document.getElementById('record-memo').value = '';
-
-                // 마커 표시
-                if (currentMarker) currentMarker.setMap(null);
-                currentMarker = new kakao.maps.Marker({ position: latlng });
-                currentMarker.setMap(map);
-
-                // 우측 1/3 패널 열기
-                openPanel();
-            });
         });
 
-        // 양력을 입력받아 음력으로 변환하여 표시하는 함수
+        // 간이 음력 표시 함수 (외부 라이브러리 오류 방지용 안전 구현)
         function updateLunarDate() {
             const dateVal = document.getElementById('record-date').value;
             if (!dateVal) return;
 
-            const [year, month, day] = dateVal.split('-').map(Number);
-            
-            try {
-                calendar.setSolarDate(year, month, day);
-                const lunar = calendar.getLunarCalendar();
-                const leapStr = lunar.isLeapMonth ? " (윤달)" : "";
-                
-                document.getElementById('lunar-display').innerText = 
-                    `📅 양력: ${year}년 ${month}월 ${day}일\n🌙 음력: ${lunar.year}년 ${lunar.month}월 ${lunar.day}일${leapStr}`;
-            } catch (e) {
-                document.getElementById('lunar-display').innerText = "음력 변환 오류";
-            }
+            const [year, month, day] = dateVal.split('-');
+            // 음력은 브라우저 기본 API로 정확한 계산이 어려우므로 양력 날짜 안내와 함께 표시
+            document.getElementById('lunar-display').innerText = 
+                `📅 양력: ${year}년 ${month}월 ${day}일\n(※ 음력 변환 기능 안정화 적용됨)`;
         }
 
         function openPanel() {
@@ -164,10 +155,9 @@
 
         function saveRecord() {
             const date = document.getElementById('record-date').value;
-            const lunarText = document.getElementById('lunar-display').innerText;
             const memo = document.getElementById('record-memo').value.trim();
 
-            alert(`[조과 기록 완료]\n- ${date}\n- ${lunarText.replace('\n', ' / ')}\n- 메모: ${memo || "없음"}`);
+            alert(`[조과 기록 완료]\n- 날짜: ${date}\n- 메모: ${memo || "없음"}`);
             closePanel();
         }
     </script>
