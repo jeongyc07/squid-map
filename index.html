@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>무늬오징어 포인트 맵</title>
+    <title>무늬오징어 포인트 맵 (Windy 연동)</title>
     <link rel="shortcut icon" href="#">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -51,21 +51,25 @@
         <div id="map"></div>
 
         <div id="info-panel">
-            <h2>🦑 무늬오징어 포인트 정보</h2>
+            <h2>🦑 무늬오징어 포인트 맵</h2>
             <p id="coords" class="sub-text">지도를 클릭하여 포인트를 지정하세요.</p>
             
             <div class="card">
-                <h3>☀️ 실시간 날씨 & 바람</h3>
+                <h3>💨 Windy 실시간 바람 정보</h3>
                 <div class="info-row">
-                    <span>날씨 상태</span>
-                    <span id="weather-text" class="weather-badge">선택 대기</span>
+                    <span>데이터 소스</span>
+                    <span class="weather-badge">Windy API (ECMWF)</span>
                 </div>
                 <div class="info-row">
-                    <span>풍속</span>
+                    <span>풍속 (Wind Speed)</span>
                     <span><b id="wind-speed" style="font-size:18px; color:#d35400;">-</b> m/s</span>
                 </div>
                 <div class="info-row">
-                    <span>풍향</span>
+                    <span>돌풍 (Wind Gust)</span>
+                    <span><b id="wind-gust" style="font-size:16px; color:#c0392b;">-</b> m/s</span>
+                </div>
+                <div class="info-row">
+                    <span>풍향 (Wind Direction)</span>
                     <div>
                         <span id="wind-arrow" class="wind-arrow">↑</span> 
                         <span id="wind-deg" style="font-size:12px; color:#7f8c8d;">(-°)</span>
@@ -84,6 +88,7 @@
 
     <script>
         const MY_WORKER_URL = "https://royal-king-8602.jeongyc07.workers.dev";
+        const WINDY_API_KEY = "CiqzCCBzx6gwHgAVLNaJb6G6RGqWSdLw";
 
         const tideStations = [
             { code: "DT_0013", name: "서귀포", lat: 33.2400, lng: 126.5617 },
@@ -128,8 +133,10 @@
 
                 document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
 
-                getWeatherData(lat, lng);
+                // Windy API로 바람 데이터 호출
+                getWindyWeatherData(lat, lng);
 
+                // KHOA 물때 데이터 호출
                 const nearestStation = findNearestStation(lat, lng);
                 getKhoaTideData(nearestStation);
             });
@@ -159,42 +166,47 @@
             return closest;
         }
 
-        function getWeatherData(lat, lng) {
-            document.getElementById('weather-text').innerText = "조회 중...";
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`;
+        // Windy Point Forecast API v2 연동 함수
+        function getWindyWeatherData(lat, lng) {
+            document.getElementById('wind-speed').innerText = "조회중";
+            document.getElementById('wind-gust').innerText = "조회중";
 
-            fetch(url)
-                .then(res => res.json())
-                .then(data => {
-                    if (!data.current_weather) {
-                        document.getElementById('weather-text').innerText = "데이터 없음";
-                        return;
-                    }
+            const payload = {
+                lat: lat,
+                lon: lng,
+                model: "gfs",
+                parameters: ["wind", "windGust", "windDir"],
+                key: WINDY_API_KEY
+            };
 
-                    const cw = data.current_weather;
-                    const windSpeed = (cw.windspeed * 0.277778).toFixed(1);
-                    const windDegree = cw.winddirection;
-                    
-                    document.getElementById('wind-speed').innerText = windSpeed;
-                    document.getElementById('wind-deg').innerText = `(${windDegree}°)`;
-                    document.getElementById('wind-arrow').style.transform = `rotate(${windDegree}deg)`;
-                    
-                    document.getElementById('weather-text').innerText = parseWmoCode(cw.weathercode);
-                })
-                .catch(err => {
-                    document.getElementById('weather-text').innerText = "조회 실패";
-                });
-        }
+            fetch("https://api.windy.com/api/point-forecast/v2", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (!data || !data.wind || !data.windDir) {
+                    document.getElementById('wind-speed').innerText = "데이터 없음";
+                    return;
+                }
 
-        function parseWmoCode(code) {
-            if (code === 0) return "☀️ 맑음";
-            if (code >= 1 && code <= 3) return "⛅ 구름 조금/흐림";
-            if (code >= 45 && code <= 48) return "🌫️ 안개";
-            if (code >= 51 && code <= 67) return "🌧️ 이슬비/비";
-            if (code >= 71 && code <= 77) return "❄️ 눈";
-            if (code >= 80 && code <= 82) return "소나기";
-            if (code >= 95) return "🌩️ 뇌우";
-            return "☀️ 맑음";
+                // 현재 시각 기준 첫 번째 배열값 사용
+                const windSpeed = data.wind[0] !== undefined ? data.wind[0].toFixed(1) : "-";
+                const windGust = data.windGust && data.windGust[0] !== undefined ? data.windGust[0].toFixed(1) : "-";
+                const windDeg = data.windDir[0] !== undefined ? Math.round(data.windDir[0]) : 0;
+
+                document.getElementById('wind-speed').innerText = windSpeed;
+                document.getElementById('wind-gust').innerText = windGust;
+                document.getElementById('wind-deg').innerText = `(${windDeg}°)`;
+                document.getElementById('wind-arrow').style.transform = `rotate(${windDeg}deg)`;
+            })
+            .catch(err => {
+                console.error("Windy API 오류:", err);
+                document.getElementById('wind-speed').innerText = "실패";
+            });
         }
 
         function getKhoaTideData(station) {
