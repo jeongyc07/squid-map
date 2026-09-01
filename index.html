@@ -43,7 +43,6 @@
         }
     </style>
 
-    <!-- 카카오 지도 SDK -->
     <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=9f9339f1c455ac084a23d987ceb30e56"></script>
 </head>
 <body>
@@ -84,10 +83,8 @@
     </div>
 
     <script>
-        // 발급받으신 Cloudflare Worker 우회 서버 주소 연동 완료
         const MY_WORKER_URL = "https://royal-king-8602.jeongyc07.workers.dev";
 
-        // 국립해양조사원 주요 관측소 목록
         const tideStations = [
             { code: "DT_0013", name: "서귀포", lat: 33.2400, lng: 126.5617 },
             { code: "DT_0004", name: "제주", lat: 33.5275, lng: 126.5431 },
@@ -204,7 +201,7 @@
 
         function getKhoaTideData(station) {
             const tideContainer = document.getElementById('tide-container');
-            tideContainer.innerHTML = `<p class="obs-name">📍 인근 관측소: ${station.name} (${station.code})</p><p style='font-size:13px; color:#888;'>해양조사원 데이터 불러오는 중...</p>`;
+            tideContainer.innerHTML = `<p class="obs-name">📍 인근 관측소: ${station.name} (${station.code})</p><p style='font-size:13px; color:#888;'>데이터 불러오는 중...</p>`;
 
             const fetchUrl = `${MY_WORKER_URL}?ObsCode=${station.code}`;
 
@@ -214,34 +211,40 @@
                     let tideList = [];
                     if (data && data.result && data.result.data) {
                         tideList = data.result.data;
+                    } else if (data && data.data) {
+                        tideList = data.data;
                     }
 
-                    if (tideList.length > 0) {
+                    if (tideList && tideList.length > 0) {
                         let html = `<p class="obs-name">📍 기준 관측소: ${station.name}</p><ul class="tide-list">`;
                         
                         tideList.forEach(item => {
-                            const isHigh = item.hl_type.includes("고조") || item.hl_type.includes("만조");
+                            const hlType = item.hl_type || item.hlType || "";
+                            const isHigh = hlType.includes("고조") || hlType.includes("만조");
                             const typeClass = isHigh ? "tide-high" : "tide-low";
                             const typeName = isHigh ? "▲ 만조" : "▼ 간조";
-                            const timeOnly = item.tide_time ? item.tide_time.split(" ")[1] : "-";
+                            
+                            const tideTime = item.tide_time || item.tideTime || "";
+                            const timeOnly = tideTime.includes(" ") ? tideTime.split(" ")[1] : tideTime;
+                            const level = item.tide_level || item.tideLevel || "-";
 
                             html += `
                                 <li class="tide-item">
                                     <span class="${typeClass}">${typeName}</span>
                                     <span>${timeOnly}</span>
-                                    <span>${item.tide_level} cm</span>
+                                    <span>${level} cm</span>
                                 </li>
                             `;
                         });
                         html += '</ul>';
                         tideContainer.innerHTML = html;
                     } else {
-                        tideContainer.innerHTML = `<p class="obs-name">📍 기준 관측소: ${station.name}</p><p style='font-size:13px; color:#888;'>오늘의 물때 데이터가 없습니다.</p>`;
+                        tideContainer.innerHTML = `<p class="obs-name">📍 기준 관측소: ${station.name}</p><p style='font-size:13px; color:#888;'>오늘의 물때 정보가 제공되지 않습니다.</p>`;
                     }
                 })
                 .catch(err => {
                     console.error("Worker 통신 에러:", err);
-                    tideContainer.innerHTML = "<p style='font-size:13px; color:#e74c3c;'>서버 연결 실패</p>";
+                    tideContainer.innerHTML = "<p style='font-size:13px; color:#e74c3c;'>서버 통신 실패 (Worker 코드 확인 필요)</p>";
                 });
         }
     </script>
