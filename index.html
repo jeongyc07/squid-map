@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>무늬오징어 포인트 맵</title>
+    <!-- 파비콘 404 에러 방지 -->
+    <link rel="shortcut icon" href="#">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { display: flex; height: 100vh; font-family: 'Apple SD Gothic Neo', sans-serif; background-color: #f4f6f8; }
@@ -39,8 +41,6 @@
             #info-panel { width: 100%; height: 45vh; }
         }
     </style>
-    <!-- 카카오 지도 SDK (autoload=false 옵션 추가) -->
-    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=9f9339f1c455ac084a23d987ceb30e56&autoload=false"></script>
 </head>
 <body>
 
@@ -81,32 +81,34 @@
         const KMA_API_KEY = "88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f";
         const KHOA_API_KEY = "88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f";
 
-        // 카카오 지도 API가 완전히 로드된 후 execution
-        kakao.maps.load(function() {
-            const mapContainer = document.getElementById('map');
-            const mapOption = { 
-                center: new kakao.maps.LatLng(33.2483, 126.5641), 
-                level: 4 
-            };
-            const map = new kakao.maps.Map(mapContainer, mapOption);
-            let marker = null;
+        // 카카오 SDK 로드가 끝난 후 실행될 지도 초기화 함수
+        function initMap() {
+            kakao.maps.load(function() {
+                const mapContainer = document.getElementById('map');
+                const mapOption = { 
+                    center: new kakao.maps.LatLng(33.2483, 126.5641), 
+                    level: 4 
+                };
+                const map = new kakao.maps.Map(mapContainer, mapOption);
+                let marker = null;
 
-            kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
-                const latlng = mouseEvent.latLng;
-                const lat = latlng.getLat();
-                const lng = latlng.getLng();
+                kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
+                    const latlng = mouseEvent.latLng;
+                    const lat = latlng.getLat();
+                    const lng = latlng.getLng();
 
-                if (marker) marker.setMap(null);
-                marker = new kakao.maps.Marker({ position: latlng });
-                marker.setMap(map);
+                    if (marker) marker.setMap(null);
+                    marker = new kakao.maps.Marker({ position: latlng });
+                    marker.setMap(map);
 
-                document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
+                    document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
 
-                const grid = dfs_xy_conv("toXY", lat, lng);
-                getKmaWeatherData(grid.x, grid.y);
-                getTideData(lat, lng);
+                    const grid = dfs_xy_conv("toXY", lat, lng);
+                    getKmaWeatherData(grid.x, grid.y);
+                    getTideData(lat, lng);
+                });
             });
-        });
+        }
 
         function getBaseTime() {
             const now = new Date();
@@ -219,5 +221,8 @@
             return rs;
         }
     </script>
+
+    <!-- 스크립트 파일이 완전히 다운로드된 직후 initMap 함수 호출 -->
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=9f9339f1c455ac084a23d987ceb30e56&autoload=false" onload="initMap()"></script>
 </body>
 </html>
