@@ -87,7 +87,7 @@
     </div>
 
     <script>
-        const KHOA_API_KEY = "88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f";
+        const MY_WORKER_URL = "https://royal-king-8602.jeongyc07.workers.dev";
 
         const tideStations = [
             { code: "DT_0013", name: "서귀포", lat: 33.2400, lng: 126.5617 },
@@ -132,10 +132,10 @@
 
                 document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
 
-                // 1. 바람 정보 (Open-Meteo) 호출
+                // 1. 바람 정보 조회
                 getWeather(lat, lng);
 
-                // 2. 물때 정보 (국립해양조사원) 호출
+                // 2. 물때 정보 조회 (Cloudflare Worker 통과)
                 const nearestStation = findNearestStation(lat, lng);
                 getTide(nearestStation);
             });
@@ -197,16 +197,9 @@
             const tideContainer = document.getElementById('tide-container');
             tideContainer.innerHTML = `<p class="obs-name">📍 인근 관측소: ${station.name}</p><p style='font-size:13px; color:#888;'>데이터 불러오는 중...</p>`;
 
-            // 오늘 날짜 계산 (YYYYMMDD)
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const dateStr = `${year}${month}${day}`;
+            const fetchUrl = `${MY_WORKER_URL}?ObsCode=${station.code}`;
 
-            const url = `https://www.khoa.go.kr/api/oceangrid/tideObsPreTab/search.do?ServiceKey=${KHOA_API_KEY}&ObsCode=${station.code}&Date=${dateStr}&ResultType=json`;
-
-            fetch(url)
+            fetch(fetchUrl)
                 .then(res => res.json())
                 .then(data => {
                     let tideList = [];
@@ -243,7 +236,7 @@
                 })
                 .catch(err => {
                     console.error("물때 API 에러:", err);
-                    tideContainer.innerHTML = "<p style='font-size:13px; color:#e74c3c;'>서버 통신 실패 (CORS 제한 가능성)</p>";
+                    tideContainer.innerHTML = "<p style='font-size:13px; color:#e74c3c;'>서버 통신 실패</p>";
                 });
         }
     </script>
