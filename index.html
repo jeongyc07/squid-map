@@ -84,7 +84,7 @@
     </div>
 
     <script>
-        // 주요 해양 조석 관측소 목록 (위도, 경도)
+        // 국립해양조사원 주요 관측소 14개 목록
         const tideStations = [
             { code: "DT_0013", name: "서귀포", lat: 33.2400, lng: 126.5617 },
             { code: "DT_0004", name: "제주", lat: 33.5275, lng: 126.5431 },
@@ -130,22 +130,33 @@
 
                 document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
 
-                // 1. 실시간 날씨 데이터 호출
+                // 1. 날씨 데이터 갱신
                 getWeatherData(lat, lng);
 
-                // 2. 가장 가까운 관측소 찾기 후 JSONP 물때 호출
+                // 2. 가장 가까운 관측소 탐색 후 정밀 물때 호출
                 const nearestStation = findNearestStation(lat, lng);
                 getKhoaTideDataJSONP(nearestStation);
             });
         });
 
-        // 가까운 관측소 계산
+        // 두 좌표 간 실제 거리를 구하는 하버사인 공식 (km)
+        function getDistanceKm(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
         function findNearestStation(lat, lng) {
             let closest = tideStations[0];
             let minDistance = Infinity;
 
             tideStations.forEach(st => {
-                const dist = Math.hypot(st.lat - lat, st.lng - lng);
+                const dist = getDistanceKm(lat, lng, st.lat, st.lng);
                 if (dist < minDistance) {
                     minDistance = dist;
                     closest = st;
@@ -154,7 +165,7 @@
             return closest;
         }
 
-        // 1. 실시간 날씨 API
+        // 1. 날씨 정보 호출
         function getWeatherData(lat, lng) {
             document.getElementById('weather-text').innerText = "조회 중...";
             const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`;
@@ -194,37 +205,35 @@
             return "☀️ 맑음";
         }
 
-        // 2. CORS 차단 없는 JSONP 기법으로 국립해양조사원 데이터 호출
+        // 2. 정확한 YYYYMMDD 날짜 생성 후 해양조사원 데이터 호출
         function getKhoaTideDataJSONP(station) {
             const tideContainer = document.getElementById('tide-container');
             tideContainer.innerHTML = `<p class="obs-name">📍 인근 관측소: ${station.name} (${station.code})</p><p style='font-size:13px; color:#888;'>해양조사원 데이터 조회 중...</p>`;
             currentStationName = station.name;
 
-            const today = new Date();
-            const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            const day = String(today.getDate()).padStart(2, '0');
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
             const dateStr = `${year}${month}${day}`;
 
             const serviceKey = "88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f";
 
-            // 이전 스크립트 태그가 있으면 삭제
             const oldScript = document.getElementById('khoa-jsonp');
             if (oldScript) oldScript.remove();
 
-            // JSONP 동적 스크립트 태그 생성 (CORS 완전 우회)
             const script = document.createElement('script');
             script.id = 'khoa-jsonp';
             script.src = `https://www.khoa.go.kr/api/oceangrid/tideObsPreTab/search.do?ServiceKey=${serviceKey}&ObsCode=${station.code}&Date=${dateStr}&ResultType=json&callback=handleTideResponse`;
             
             script.onerror = function() {
-                tideContainer.innerHTML = "<p style='font-size:13px; color:#e74c3c;'>해양조사원 데이터 응답 지연</p>";
+                tideContainer.innerHTML = "<p style='font-size:13px; color:#e74c3c;'>해양조사원 서버 응답 지연 (다시 클릭해 주세요)</p>";
             };
 
             document.body.appendChild(script);
         }
 
-        // JSONP 콜백 함수 (국립해양조사원에서 데이터가 오면 자동 실행)
+        // KHOA 데이터 응답 처리
         window.handleTideResponse = function(data) {
             const tideContainer = document.getElementById('tide-container');
             let tideList = [];
@@ -234,7 +243,9 @@
             }
 
             if (tideList.length > 0) {
-                let html = `<p class="obs-name">📍 기준 관측소: ${currentStationName}</p><ul class="tide-list">`;
+                const todayTitle = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
+                let html = `<p class="obs-name">📍 기준 관측소: ${currentStationName} (${todayTitle} 기준)</p><ul class="tide-list">`;
+                
                 tideList.forEach(item => {
                     const isHigh = item.hl_type.includes("고조") || item.hl_type.includes("만조");
                     const typeClass = isHigh ? "tide-high" : "tide-low";
