@@ -28,7 +28,7 @@
             const mapOption = { 
                 center: new kakao.maps.LatLng(33.38, 126.55), // 초기 중심 좌표 (제주도)
                 level: 9, 
-                mapTypeId: kakao.maps.MapTypeId.SKYVIEW // 위성 지도 설정
+                mapTypeId: kakao.maps.MapTypeId.HYBRID // 💡 위성 사진 + 지명/도로명이 함께 나오는 하이브리드 설정
             };
 
             const map = new kakao.maps.Map(mapContainer, mapOption);
