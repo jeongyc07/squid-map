@@ -43,8 +43,8 @@
             #info-panel { width: 100%; height: 45vh; }
         }
     </style>
-    <!-- [수정1] 카카오 JavaScript 키 입력 -->
-    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=9f9339f1c455ac084a23d987ceb30e56"></script>
+    <!-- 카카오 지도 API (JavaScript 키) -->
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=9f9339f1c455ac084a23d987ceb30e56"></script>
 </head>
 <body>
 
@@ -82,10 +82,7 @@
     </div>
 
     <script>
-        // [수정2] 기상청 인증키 (Encoding)
         const KMA_API_KEY = "88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f";
-        
-        // [수정3] 국립해양조사원 인증키 (Encoding)
         const KHOA_API_KEY = "88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f";
 
         const mapContainer = document.getElementById('map');
@@ -112,19 +109,29 @@
             getTideData(lat, lng);
         });
 
+        // 현재 시각 기준 1시간 전 base_time/base_date 구하기
+        function getBaseTime() {
+            const now = new Date();
+            now.setHours(now.getHours() - 1); // 1시간 전
+            const year = now.getFullYear();
+            const month = ('0' + (now.getMonth() + 1)).slice(-2);
+            const day = ('0' + now.getDate()).slice(-2);
+            const hours = ('0' + now.getHours()).slice(-2) + '00';
+            return { baseDate: `${year}${month}${day}`, baseTime: hours };
+        }
+
         // 기상청 날씨/바람 조회
         function getKmaWeatherData(nx, ny) {
-            const today = new Date();
-            const year = today.getFullYear();
-            const month = ('0' + (today.getMonth() + 1)).slice(-2);
-            const day = ('0' + today.getDate()).slice(-2);
-            const baseDate = `${year}${month}${day}`;
-
-            const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst?serviceKey=${KMA_API_KEY}&pageNo=1&numOfRows=100&dataType=JSON&base_date=${baseDate}&base_time=0600&nx=${nx}&ny=${ny}`;
+            const { baseDate, baseTime } = getBaseTime();
+            const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst?serviceKey=${KMA_API_KEY}&pageNo=1&numOfRows=100&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${nx}&ny=${ny}`;
 
             fetch(url)
                 .then(res => res.json())
                 .then(data => {
+                    if (!data.response || !data.response.body || !data.response.body.items) {
+                        document.getElementById('weather-text').innerText = "데이터 없음";
+                        return;
+                    }
                     const items = data.response.body.items.item;
                     let vec = 0, wsd = 0, pty = 0;
 
@@ -147,7 +154,7 @@
                 });
         }
 
-        // 국립해양조사원 물때 조회 (바다누리 API)
+        // 국립해양조사원 물때 조회
         function getTideData(lat, lng) {
             const today = new Date();
             const year = today.getFullYear();
@@ -155,7 +162,7 @@
             const day = ('0' + today.getDate()).slice(-2);
             const dateStr = `${year}${month}${day}`;
 
-            const obsCode = "DT_0013"; // 서귀포 관측소 기준 (필요시 변경)
+            const obsCode = "DT_0013"; // 서귀포 관측소 기준
             const url = `https://www.khoa.go.kr/api/oceangrid/tideObsPreTab/search.do?ServiceKey=${KHOA_API_KEY}&ObsCode=${obsCode}&Date=${dateStr}&ResultType=json`;
 
             fetch(url)
