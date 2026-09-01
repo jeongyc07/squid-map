@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>무늬오징어 포인트 맵 (Windy 연동)</title>
+    <title>무늬오징어 포인트 맵 (Windy ECMWF 연동)</title>
     <link rel="shortcut icon" href="#">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -58,7 +58,7 @@
                 <h3>💨 Windy 실시간 바람 정보</h3>
                 <div class="info-row">
                     <span>데이터 소스</span>
-                    <span class="weather-badge">Windy API (ECMWF)</span>
+                    <span class="weather-badge">Windy (ECMWF 모델)</span>
                 </div>
                 <div class="info-row">
                     <span>풍속 (Wind Speed)</span>
@@ -133,10 +133,8 @@
 
                 document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
 
-                // Windy API로 바람 데이터 호출
                 getWindyWeatherData(lat, lng);
 
-                // KHOA 물때 데이터 호출
                 const nearestStation = findNearestStation(lat, lng);
                 getKhoaTideData(nearestStation);
             });
@@ -166,7 +164,7 @@
             return closest;
         }
 
-        // Windy Point Forecast API v2 연동 함수
+        // Windy Point Forecast API v2 (ECMWF 모델 + 현재 시간 맞춤) 연동
         function getWindyWeatherData(lat, lng) {
             document.getElementById('wind-speed').innerText = "조회중";
             document.getElementById('wind-gust').innerText = "조회중";
@@ -174,7 +172,7 @@
             const payload = {
                 lat: lat,
                 lon: lng,
-                model: "gfs",
+                model: "ecmwf", // 윈디 웹에서 주로 보는 고정밀 ECMWF 모델로 변경
                 parameters: ["wind", "windGust", "windDir"],
                 key: WINDY_API_KEY
             };
@@ -188,15 +186,27 @@
             })
             .then(res => res.json())
             .then(data => {
-                if (!data || !data.wind || !data.windDir) {
+                if (!data || !data.ts || !data.wind || !data.windDir) {
                     document.getElementById('wind-speed').innerText = "데이터 없음";
                     return;
                 }
 
-                // 현재 시각 기준 첫 번째 배열값 사용
-                const windSpeed = data.wind[0] !== undefined ? data.wind[0].toFixed(1) : "-";
-                const windGust = data.windGust && data.windGust[0] !== undefined ? data.windGust[0].toFixed(1) : "-";
-                const windDeg = data.windDir[0] !== undefined ? Math.round(data.windDir[0]) : 0;
+                // 현재 시간과 가장 가까운 예보 인덱스(시간대) 찾기
+                const now = new Date().getTime();
+                let closestIndex = 0;
+                let minDiff = Infinity;
+
+                data.ts.forEach((timestamp, index) => {
+                    const diff = Math.abs(timestamp - now);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        closestIndex = index;
+                    }
+                });
+
+                const windSpeed = data.wind[closestIndex] !== undefined ? data.wind[closestIndex].toFixed(1) : "-";
+                const windGust = data.windGust && data.windGust[closestIndex] !== undefined ? data.windGust[closestIndex].toFixed(1) : "-";
+                const windDeg = data.windDir[closestIndex] !== undefined ? Math.round(data.windDir[closestIndex]) : 0;
 
                 document.getElementById('wind-speed').innerText = windSpeed;
                 document.getElementById('wind-gust').innerText = windGust;
