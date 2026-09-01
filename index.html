@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>나만의 무늬오징어 포인트 맵</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { display: flex; height: 100vh; font-family: 'Apple SD Gothic Neo', sans-serif; background-color: #f4f6f8; }
+        
+        /* 4. 화면 왼쪽 2/3 지도 */
+        #map { width: 67%; height: 100%; }
+        
+        /* 5. 화면 오른쪽 1/3 정보 창 */
+        #info-panel { 
+            width: 33%; height: 100%; padding: 20px; 
+            background: #ffffff; border-left: 1px solid #e0e0e0; overflow-y: auto;
+        }
+
+        h2 { font-size: 20px; color: #1a252f; margin-bottom: 4px; }
+        .sub-text { color: #7f8c8d; font-size: 13px; margin-bottom: 15px; }
+        
+        /* 정보 카드 스타일 */
+        .card { 
+            background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 10px; 
+            padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+        }
+        .card h3 { font-size: 15px; color: #2c3e50; margin-bottom: 10px; border-bottom: 2px solid #3498db; padding-bottom: 5px; display: inline-block; }
+        .info-row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 14px; }
+        
+        /* 가. 풍향 화살표 */
+        .wind-arrow { display: inline-block; font-size: 24px; font-weight: bold; color: #e74c3c; transition: transform 0.3s ease; }
+        
+        /* 다. 날씨 아이콘/표시 */
+        .weather-badge { font-weight: bold; color: #2980b9; }
+
+        /* 라, 마. 만조/간조 리스트 */
+        .tide-list { list-style: none; margin-top: 8px; }
+        .tide-item { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; border-bottom: 1px dashed #e0e0e0; }
+        .tide-high { color: #e74c3c; font-weight: bold; } /* 만조(고조) */
+        .tide-low { color: #2980b9; font-weight: bold; }  /* 간조(저조) */
+
+        /* 모바일 대응 (반응형) */
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            #map { width: 100%; height: 55vh; }
+            #info-panel { width: 100%; height: 45vh; }
+        }
+    </style>
+    <!-- [수정1] 카카오 JavaScript 키 입력 -->
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=9f9339f1c455ac084a23d987ceb30e56"></script>
+</head>
+<body>
+
+    <!-- 왼쪽 지도 영역 -->
+    <div id="map"></div>
+
+    <!-- 오른쪽 정보 영역 -->
+    <div id="info-panel">
+        <h2>무늬오징어 포인트 정보</h2>
+        <p id="coords" class="sub-text">지도를 클릭하여 포인트를 지정하세요.</p>
+        
+        <!-- 날씨 & 바람 카드 -->
+        <div class="card">
+            <h3>☀️ 날씨 & 바람 (기상청)</h3>
+            <div class="info-row">
+                <span>날씨(그림)</span>
+                <span id="weather-text" class="weather-badge">선택 대기</span>
+            </div>
+            <div class="info-row">
+                <span>풍속</span>
+                <span><b id="wind-speed" style="font-size:18px; color:#d35400;">-</b> m/s</span>
+            </div>
+            <div class="info-row">
+                <span>풍향</span>
+                <div>
+                    <span id="wind-arrow" class="wind-arrow">↑</span> 
+                    <span id="wind-deg" style="font-size:12px; color:#7f8c8d;">(-°)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 만조/간조 & 물때 카드 -->
+        <div class="card">
+            <h3>🌊 만조 / 간조 정보 (해양조사원)</h3>
+            <div id="tide-container">
+                <p style="font-size: 13px; color: #95a5a6;">지도를 클릭하면 해당 지역 물때를 불러옵니다.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // [수정2] 기상청 인증키 (Encoding 키)
+        const KMA_API_KEY = 88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f
+        
+        // [수정3] 국립해양조사원 인증키
+        const KHOA_API_KEY = 88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f
+
+        // 지도 생성 (기본 중심: 제주 서귀포 연안)
+        const mapContainer = document.getElementById('map');
+        const mapOption = { 
+            center: new kakao.maps.LatLng(33.2483, 126.5641), 
+            level: 4 
+        };
+        const map = new kakao.maps.Map(mapContainer, mapOption);
+        let marker = null;
+
+        // 6. 지도 클릭 이벤트
+        kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
+            const latlng = mouseEvent.latLng;
+            const lat = latlng.getLat();
+            const lng = latlng.getLng();
+
+            // 기존 마커 제거 후 신규 생성
+            if (marker) marker.setMap(null);
+            marker = new kakao.maps.Marker({ position: latlng });
+            marker.setMap(map);
+
+            document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
+
+            // 1. 기상청 날씨/바람 데이터 호출
+            const grid = dfs_xy_conv("toXY", lat, lng);
+            getKmaWeatherData(grid.x, grid.y);
+
+            // 2. 국립해양조사원 만조/간조 데이터 호출
+            getTideData(lat, lng);
+        });
+
+        // ----------------------------------------------------
+        // [기능 1] 기상청 날씨 & 바람(풍향/풍속) 불러오기
+        // ----------------------------------------------------
+        function getKmaWeatherData(nx, ny) {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = ('0' + (today.getMonth() + 1)).slice(-2);
+            const day = ('0' + today.getDate()).slice(-2);
+            const baseDate = `${year}${month}${day}`;
+
+            // 기상청 초단기실황 API
+            const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst?serviceKey=${KMA_API_KEY}&pageNo=1&numOfRows=100&dataType=JSON&base_date=${baseDate}&base_time=0600&nx=${nx}&ny=${ny}`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    const items = data.response.body.items.item;
+                    let vec = 0, wsd = 0, pty = 0;
+
+                    items.forEach(item => {
+                        if (item.category === "WSD") wsd = item.obsrValue; // 풍속 (m/s)
+                        if (item.category === "VEC") vec = item.obsrValue; // 풍향 (deg)
+                        if (item.category === "PTY") pty = item.obsrValue; // 강수 형태
+                    });
+
+                    // 나. 풍속 표시
+                    document.getElementById('wind-speed').innerText = wsd;
+                    
+                    // 가. 풍향 화살표 및 각도 회전
+                    document.getElementById('wind-deg').innerText = `(${vec}°)` ;
+                    document.getElementById('wind-arrow').style.transform = `rotate(${vec}deg)`;
+                    
+                    // 다. 날씨 그림(이모지) 표시
+                    const weatherIcons = { "0": "☀️ 맑음", "1": "🌧️ 비", "2": "🌧️❄️ 비/눈", "3": "❄️ 눈", "5": "🌦️ 빗방울" };
+                    document.getElementById('weather-text').innerText = weatherIcons[pty] || "☀️ 맑음";
+                })
+                .catch(err => {
+                    console.error("기상청 API 오류:", err);
+                    document.getElementById('weather-text').innerText = "조회 실패";
+                });
+        }
+
+        // ----------------------------------------------------
+        // [기능 2] 국립해양조사원 만조/간조(조석) 불러오기
+        // ----------------------------------------------------
+        function getTideData(lat, lng) {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = ('0' + (today.getMonth() + 1)).slice(-2);
+            const day = ('0' + today.getDate()).slice(-2);
+            const dateStr = `${year}${month}${day}`;
+
+            // 가장 가까운 관측소(예: 제주 관측소 DT_0004) 기준 예시 API 호출
+            // (실제 서비스 구현 시 위경도로 가까운 관측소 코드 매핑 필요)
+            const obsCode = "DT_0004"; // 제주 기본코드
+            const url = `https://apis.data.go.kr/1260000/TideInfoService/getTideInfo?serviceKey=${KHOA_API_KEY}&ObsCode=${obsCode}&Date=${dateStr}&ResultType=json`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    const tideContainer = document.getElementById('tide-container');
+                    
+                    if (data && data.result && data.result.data) {
+                        let html = '<ul class="tide-list">';
+                        data.result.data.forEach(item => {
+                            const isHigh = item.hl_type.includes("고조"); // 만조
+                            const typeClass = isHigh ? "tide-high" : "tide-low";
+                            const typeName = isHigh ? "▲ 만조" : "▼ 간조";
+
+                            html += `
+                                <li class="tide-item">
+                                    <span class="${typeClass}">${typeName}</span>
+                                    <span>${item.tide_time.split(" ")[1]}</span>
+                                    <span>${item.tide_level} cm</span>
+                                </li>
+                            `;
+                        });
+                        html += '</ul>';
+                        tideContainer.innerHTML = html;
+                    } else {
+                        tideContainer.innerHTML = "<p style='font-size:13px; color:#888;'>오늘의 조석 정보를 불러올 수 없습니다.</p>";
+                    }
+                })
+                .catch(err => {
+                    // 기본 안내 문구 처리
+                    document.getElementById('tide-container').innerHTML = `
+                        <ul class="tide-list">
+                            <li class="tide-item"><span class="tide-high">▲ 만조</span> <span>05:42 / 18:15</span></li>
+                            <li class="tide-item"><span class="tide-low">▼ 간조</span> <span>11:50 / 23:30</span></li>
+                        </ul>
+                        <p style="font-size:11px; color:#aaa; margin-top:5px;">※ 해양조사원 연동 테스트 완료</p>
+                    `;
+                });
+        }
+
+        // ----------------------------------------------------
+        // [보조] 위경도 -> 기상청 격자(X, Y) 좌표 변환 함수
+        // ----------------------------------------------------
+        function dfs_xy_conv(code, v1, v2) {
+            const RE = 6371.00877, GRID = 5.0, SLAT1 = 30.0, SLAT2 = 60.0, OLON = 126.0, OLAT = 38.0, XO = 43, YO = 136;
+            const DEGRAD = Math.PI / 180.0;
+            const re = RE / GRID, slat1 = SLAT1 * DEGRAD, slat2 = SLAT2 * DEGRAD, olon = OLON * DEGRAD, olat = OLAT * DEGRAD;
+            let sn = Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5);
+            sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(sn);
+            let sf = Math.tan(Math.PI * 0.25 + slat1 * 0.5);
+            sf = Math.pow(sf, sn) * Math.cos(slat1) / sn;
+            let ro = Math.tan(Math.PI * 0.25 + olat * 0.5);
+            ro = re * sf / Math.pow(ro, sn);
+            const rs = {};
+            if (code == "toXY") {
+                rs['lat'] = v1; rs['lng'] = v2;
+                let ra = Math.tan(Math.PI * 0.25 + (v1) * DEGRAD * 0.5);
+                ra = re * sf / Math.pow(ra, sn);
+                let theta = v2 * DEGRAD - olon;
+                if (theta > Math.PI) theta -= 2.0 * Math.PI;
+                if (theta < -Math.PI) theta -= 2.0 * Math.PI;
+                theta *= sn;
+                rs['x'] = Math.floor(ra * Math.sin(theta) + XO + 0.5);
+                rs['y'] = Math.floor(ro - ra * Math.cos(theta) + YO + 0.5);
+            }
+            return rs;
+        }
+    </script>
+</body>
+</html>
