@@ -55,10 +55,10 @@
             <p id="coords" class="sub-text">지도를 클릭하여 포인트를 지정하세요.</p>
             
             <div class="card">
-                <h3>💨 실시간 해안가 바람 정보</h3>
+                <h3>💨 실시간 해안가 바람 정보 (기상청 모델 연동)</h3>
                 <div class="info-row">
                     <span>데이터 소스</span>
-                    <span class="weather-badge">Open-Meteo Weather</span>
+                    <span class="weather-badge">KMA (Open-Meteo)</span>
                 </div>
                 <div class="info-row">
                     <span>풍속 (Wind Speed)</span>
@@ -87,7 +87,6 @@
     </div>
 
     <script>
-        // 지역별 표준 물때 정보 데이터베이스 (서버 에러 원천 차단)
         const tideDataMap = {
             "제주": [
                 { type: "만조", time: "06:15", level: "280 cm" },
@@ -168,10 +167,9 @@
 
                 document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
 
-                // 1. 실시간 바람 정보 조회 (Open-Meteo)
+                // 한국 기상청(KMA) 고해상도 모델을 적용한 바람 정보 호출
                 getWeather(lat, lng);
 
-                // 2. 인근 지역 물때 정보 즉시 출력
                 const nearest = findNearestStation(lat, lng);
                 renderTideInfo(nearest);
             });
@@ -205,7 +203,8 @@
             document.getElementById('wind-speed').innerText = "조회중";
             document.getElementById('wind-gust').innerText = "조회중";
 
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m`;
+            // 💡 한국 기상청(KMA) 통합 고해상도 모델(kma_seamless) 적용 URL
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&models=kma_seamless`;
 
             fetch(url)
                 .then(res => res.json())
