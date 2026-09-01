@@ -132,10 +132,7 @@
 
                 document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
 
-                // 1. 바람 정보 조회
                 getWeather(lat, lng);
-
-                // 2. 물때 정보 조회 (Cloudflare Worker 통과)
                 const nearestStation = findNearestStation(lat, lng);
                 getTide(nearestStation);
             });
@@ -175,7 +172,7 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data && data.current) {
-                        const speed = data.current.wind_speed_10m;
+                        const speed = data.current.wind_speed_10m;	
                         const gust = data.current.wind_gusts_10m;
                         const deg = data.current.wind_direction_10m;
 
@@ -183,14 +180,9 @@
                         document.getElementById('wind-gust').innerText = gust !== undefined ? gust.toFixed(1) : "-";
                         document.getElementById('wind-deg').innerText = `(${deg}°)`;
                         document.getElementById('wind-arrow').style.transform = `rotate(${deg}deg)`;
-                    } else {
-                        document.getElementById('wind-speed').innerText = "데이터 없음";
                     }
                 })
-                .catch(err => {
-                    console.error("날씨 API 에러:", err);
-                    document.getElementById('wind-speed').innerText = "실패";
-                });
+                .catch(err => console.error("날씨 에러:", err));
         }
 
         function getTide(station) {
@@ -202,23 +194,33 @@
             fetch(fetchUrl)
                 .then(res => res.json())
                 .then(data => {
+                    console.log("물때 API 응답 원본:", data); // F12 콘솔에서 확인용
+
                     let tideList = [];
-                    if (data && data.result && data.result.data) {
+                    
+                    // 다양한 응답 구조 자동 탐색
+                    if (data.result && data.result.data) {
                         tideList = data.result.data;
+                    } else if (data.tideObsPreTab && data.tideObsPreTab.data) {
+                        tideList = data.tideObsPreTab.data;
+                    } else if (data.data) {
+                        tideList = data.data;
+                    } else if (Array.isArray(data)) {
+                        tideList = data;
                     }
 
                     if (tideList.length > 0) {
                         let html = `<p class="obs-name">📍 기준 관측소: ${station.name}</p><ul class="tide-list">`;
                         
                         tideList.forEach(item => {
-                            const hlType = item.hl_type || "";
-                            const isHigh = hlType.includes("고조") || hlType.includes("만조");
+                            const hlType = item.hl_type || item.tide_type || "";
+                            const isHigh = hlType.includes("고조") || hlType.includes("만조") || hlType === "HIGH";
                             const typeClass = isHigh ? "tide-high" : "tide-low";
                             const typeName = isHigh ? "▲ 만조" : "▼ 간조";
                             
-                            const tideTime = item.tide_time || "";
+                            const tideTime = item.tide_time || item.time || "";
                             const timeOnly = tideTime.includes(" ") ? tideTime.split(" ")[1] : tideTime;
-                            const level = item.tide_level || "-";
+                            const level = item.tide_level || item.level || "-";
 
                             html += `
                                 <li class="tide-item">
@@ -231,11 +233,11 @@
                         html += '</ul>';
                         tideContainer.innerHTML = html;
                     } else {
-                        tideContainer.innerHTML = `<p class="obs-name">📍 기준 관측소: ${station.name}</p><p style='font-size:13px; color:#e74c3c;'>오늘의 물때 정보가 없습니다.</p>`;
+                        tideContainer.innerHTML = `<p class="obs-name">📍 기준 관측소: ${station.name}</p><p style='font-size:13px; color:#e74c3c;'>오늘의 물때 정보가 없습니다. (데이터 구조 확인 필요)</p>`;
                     }
                 })
                 .catch(err => {
-                    console.error("물때 API 에러:", err);
+                    console.error("물때 통신 에러:", err);
                     tideContainer.innerHTML = "<p style='font-size:13px; color:#e74c3c;'>서버 통신 실패</p>";
                 });
         }
