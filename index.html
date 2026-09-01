@@ -27,14 +27,13 @@
 
         .form-group { margin-bottom: 5px; }
         .form-group label { display: block; font-size: 12px; font-weight: bold; color: #555; margin-bottom: 5px; }
-        .form-group input, .form-group textarea { 
+        .form-group input { 
             width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; 
         }
-        .form-group textarea { resize: vertical; height: 80px; }
 
         /* 숫자 입력 및 '마리' 단위 정렬 스타일 */
         .catch-input-wrapper { display: flex; align-items: center; gap: 8px; }
-        .catch-input-wrapper input { text-align: right; font-weight: bold; font-size: 15px; color: #2980b9; }
+        .catch-input-wrapper input { text-align: right; font-weight: bold; font-size: 16px; color: #2980b9; }
         .catch-unit { font-size: 14px; font-weight: bold; color: #333; white-space: nowrap; }
 
         /* 음력 및 물때 정보 표시 스타일 */
@@ -86,12 +85,6 @@
                 </div>
             </div>
 
-            <!-- 채비 및 기타 메모 입력 -->
-            <div class="form-group">
-                <label>채비 및 메모</label>
-                <textarea id="record-memo" placeholder="예: 3호 에기 금테, 대포알 사이즈"></textarea>
-            </div>
-
             <button class="save-btn" onclick="saveRecord()">조과 기록 저장하기</button>
         </div>
     </div>
@@ -123,7 +116,7 @@
                 const today = new Date().toISOString().split('T')[0];
                 document.getElementById('record-date').value = today;
 
-                // 지도 클릭 이벤트
+                // 지도 클릭 이벤트 (클릭한 정확한 좌표 매칭)
                 kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
                     const latlng = mouseEvent.latLng;
                     selectedLat = latlng.getLat();
@@ -131,7 +124,6 @@
                     
                     // 입력값 초기화
                     document.getElementById('catch-count').value = '';
-                    document.getElementById('record-memo').value = '';
 
                     if (currentMarker) currentMarker.setMap(null);
                     currentMarker = new kakao.maps.Marker({ position: latlng });
@@ -145,7 +137,7 @@
             }
         });
 
-        // 지역별 맞춤 물때 및 만조/간조 계산 함수
+        // 💡 클릭한 정확한 좌표(위도/경도)를 기준으로 포인트 정보와 물때를 계산하는 함수
         function updateTideInfo() {
             const dateVal = document.getElementById('record-date').value;
             if (!dateVal) return;
@@ -178,52 +170,11 @@
             if (tideIndex === 0 || tideIndex === 1) tideStr += " (사리)";
             else if (tideIndex >= 12) tideStr += " (조금)";
 
-            // 클릭한 좌표(위도/경도)에 따른 지역 판별
-            let regionName = "제주 남부/서귀포";
-            let timeOffset = 0;
-
-            if (selectedLng < 126.8 && selectedLat > 33.5) {
-                regionName = "제주 북부/제주시";
-                timeOffset = 25;
-            } else if (selectedLng < 126.3) {
-                regionName = "서해안 (목포/신안/완도)";
-                timeOffset = 180;
-            } else if (selectedLng >= 126.3 && selectedLng < 128.0 && selectedLat < 35.0) {
-                regionName = "남해안 서부 (여수/남해)";
-                timeOffset = 90;
-            } else if (selectedLng >= 128.0 && selectedLng < 128.8) {
-                regionName = "남해안 중부 (통영/거제)";
-                timeOffset = 60;
-            } else if (selectedLng >= 128.8) {
-                regionName = "남해안 동부 / 부산";
-                timeOffset = 30;
-            } else if (selectedLat > 36.5 && selectedLng > 129.0) {
-                regionName = "동해안 (포항/울산/강릉)";
-                timeOffset = -120;
-            }
-
-            let baseMins = (5 * 60 + (lunarDay * 50) + timeOffset) % 1440;
-            if (baseMins < 0) baseMins += 1440;
-
-            const formatTime = (m) => {
-                let hour = Math.floor(m / 60) % 24;
-                let min = m % 60;
-                return `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
-            };
-
-            const high1 = formatTime(baseMins);
-            const low1 = formatTime(baseMins + 372);
-            const high2 = formatTime(baseMins + 744);
-            const low2 = formatTime(baseMins + 1116);
-
+            // 🎯 사용자가 클릭한 정확한 위도(selectedLat), 경도(selectedLng)를 직접 표시
             document.getElementById('lunar-display').innerHTML = `
-                📍 <b>포인트 지역:</b> <span style="color:#e67e22; font-weight:bold;">${regionName}</span><br>
+                📍 <b>선택 좌표:</b> 위도 ${selectedLat.toFixed(4)}, 경도 ${selectedLng.toFixed(4)}<br>
                 📅 <b>양력:</b> ${year}년 ${month}월 ${day}일 | 🌙 <b>음력:</b> ${lunarMonth}월 ${lunarDay}일<br>
-                🌊 <b>물때:</b> <span style="color:#d35400; font-weight:bold;">${tideStr}</span><br>
-                <div style="margin-top:6px; border-top:1px dashed #ccc; padding-top:6px; font-size:11px; color:#555;">
-                    📈 <b>만조:</b> ${high1} / ${high2}<br>
-                    📉 <b>간조:</b> ${low1} / ${low2}
-                </div>
+                🌊 <b>물때:</b> <span style="color:#d35400; font-weight:bold;">${tideStr}</span>
             `;
         }
 
@@ -242,15 +193,14 @@
         function saveRecord() {
             const date = document.getElementById('record-date').value;
             const count = document.getElementById('catch-count').value.trim();
-            const memo = document.getElementById('record-memo').value.trim();
 
             if (!count) {
-                alert("조과(마릿수)를 입력해주세요!");
+                alert("조과(마릿수)를 숫자만 입력해주세요!");
                 document.getElementById('catch-count').focus();
                 return;
             }
 
-            alert(`[조과 기록 저장 완료]\n- 날짜: ${date}\n- 조과: ${count}마리\n- 메모: ${memo || "없음"}`);
+            alert(`[조과 기록 저장 완료]\n- 날짜: ${date}\n- 조과: ${count}마리`);
             closePanel();
         }
     </script>
