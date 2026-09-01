@@ -58,7 +58,7 @@
                 <h3>💨 실시간 해안가 바람 정보</h3>
                 <div class="info-row">
                     <span>데이터 소스</span>
-                    <span class="weather-badge">Global Weather API</span>
+                    <span class="weather-badge">Open-Meteo Weather</span>
                 </div>
                 <div class="info-row">
                     <span>풍속 (Wind Speed)</span>
@@ -87,7 +87,7 @@
     </div>
 
     <script>
-        const MY_WORKER_URL = "https://royal-king-8602.jeongyc07.workers.dev";
+        const KHOA_API_KEY = "88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f";
 
         const tideStations = [
             { code: "DT_0013", name: "서귀포", lat: 33.2400, lng: 126.5617 },
@@ -132,12 +132,12 @@
 
                 document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
 
-                // 1. 바람 정보 조회 (Open-Meteo 무료 API 직접 호출)
-                getOpenMeteoWeather(lat, lng);
+                // 1. 바람 정보 (Open-Meteo) 호출
+                getWeather(lat, lng);
 
-                // 2. 물때 정보 조회 (기존 워커 활용)
+                // 2. 물때 정보 (국립해양조사원) 호출
                 const nearestStation = findNearestStation(lat, lng);
-                getKhoaTideData(nearestStation);
+                getTide(nearestStation);
             });
         });
 
@@ -165,8 +165,7 @@
             return closest;
         }
 
-        // Open-Meteo 바람 데이터 API (키 필요 없음, 실시간 풍속/돌풍/풍향 제공)
-        function getOpenMeteoWeather(lat, lng) {
+        function getWeather(lat, lng) {
             document.getElementById('wind-speed').innerText = "조회중";
             document.getElementById('wind-gust').innerText = "조회중";
 
@@ -190,26 +189,29 @@
                 })
                 .catch(err => {
                     console.error("날씨 API 에러:", err);
-                    document.getElementById('wind-speed').innerText = "통신 실패";
+                    document.getElementById('wind-speed').innerText = "실패";
                 });
         }
 
-        // 국립해양조사원 물때 데이터 전용 함수
-        function getKhoaTideData(station) {
+        function getTide(station) {
             const tideContainer = document.getElementById('tide-container');
             tideContainer.innerHTML = `<p class="obs-name">📍 인근 관측소: ${station.name}</p><p style='font-size:13px; color:#888;'>데이터 불러오는 중...</p>`;
 
-            const fetchUrl = `${MY_WORKER_URL}?ObsCode=${station.code}`;
+            // 오늘 날짜 계산 (YYYYMMDD)
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const dateStr = `${year}${month}${day}`;
 
-            fetch(fetchUrl)
+            const url = `https://www.khoa.go.kr/api/oceangrid/tideObsPreTab/search.do?ServiceKey=${KHOA_API_KEY}&ObsCode=${station.code}&Date=${dateStr}&ResultType=json`;
+
+            fetch(url)
                 .then(res => res.json())
                 .then(data => {
                     let tideList = [];
-                    // 만조/간조 데이터 파싱
                     if (data && data.result && data.result.data) {
                         tideList = data.result.data;
-                    } else if (data && data.tide && data.tide.result && data.tide.result.data) {
-                        tideList = data.tide.result.data;
                     }
 
                     if (tideList.length > 0) {
@@ -240,8 +242,8 @@
                     }
                 })
                 .catch(err => {
-                    console.error("물때 통신 에러:", err);
-                    tideContainer.innerHTML = "<p style='font-size:13px; color:#e74c3c;'>서버 통신 실패</p>";
+                    console.error("물때 API 에러:", err);
+                    tideContainer.innerHTML = "<p style='font-size:13px; color:#e74c3c;'>서버 통신 실패 (CORS 제한 가능성)</p>";
                 });
         }
     </script>
