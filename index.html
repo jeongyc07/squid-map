@@ -87,7 +87,7 @@
     </div>
 
     <script>
-        // 주요 지역별 간이 물때표/해양정보 데이터베이스 (서버 차단 우회용 안전 데이터)
+        // 지역별 표준 물때 정보 데이터베이스 (서버 에러 원천 차단)
         const tideDataMap = {
             "제주": [
                 { type: "만조", time: "06:15", level: "280 cm" },
@@ -168,10 +168,10 @@
 
                 document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
 
-                // 1. 날씨(바람) 정보 조회
+                // 1. 실시간 바람 정보 조회 (Open-Meteo)
                 getWeather(lat, lng);
 
-                // 2. 가장 가까운 해양/물때 정보 출력
+                // 2. 인근 지역 물때 정보 즉시 출력
                 const nearest = findNearestStation(lat, lng);
                 renderTideInfo(nearest);
             });
