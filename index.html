@@ -30,7 +30,12 @@
         .form-group input, .form-group textarea { 
             width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; 
         }
-        .form-group textarea { resize: vertical; height: 100px; }
+        .form-group textarea { resize: vertical; height: 80px; }
+
+        /* 숫자 입력 및 '마리' 단위 정렬 스타일 */
+        .catch-input-wrapper { display: flex; align-items: center; gap: 8px; }
+        .catch-input-wrapper input { text-align: right; font-weight: bold; font-size: 15px; color: #2980b9; }
+        .catch-unit { font-size: 14px; font-weight: bold; color: #333; white-space: nowrap; }
 
         /* 음력 및 물때 정보 표시 스타일 */
         #lunar-display {
@@ -72,10 +77,21 @@
                 <div id="lunar-display">지도를 클릭하여 포인트를 선택하세요.</div>
             </div>
 
+            <!-- 조과 마릿수 입력 (숫자 전용) -->
             <div class="form-group">
-                <label>조과 및 채비 메모</label>
-                <textarea id="record-memo" placeholder="예: 3마리 포획 (대포알 사이즈), 3호 에기 금테, 물때 좋음"></textarea>
+                <label>조과 (마릿수)</label>
+                <div class="catch-input-wrapper">
+                    <input type="number" id="catch-count" min="0" placeholder="숫자만 입력">
+                    <span class="catch-unit">마리</span>
+                </div>
             </div>
+
+            <!-- 채비 및 기타 메모 입력 -->
+            <div class="form-group">
+                <label>채비 및 메모</label>
+                <textarea id="record-memo" placeholder="예: 3호 에기 금테, 대포알 사이즈"></textarea>
+            </div>
+
             <button class="save-btn" onclick="saveRecord()">조과 기록 저장하기</button>
         </div>
     </div>
@@ -113,6 +129,8 @@
                     selectedLat = latlng.getLat();
                     selectedLng = latlng.getLng();
                     
+                    // 입력값 초기화
+                    document.getElementById('catch-count').value = '';
                     document.getElementById('record-memo').value = '';
 
                     if (currentMarker) currentMarker.setMap(null);
@@ -160,9 +178,9 @@
             if (tideIndex === 0 || tideIndex === 1) tideStr += " (사리)";
             else if (tideIndex >= 12) tideStr += " (조금)";
 
-            // 💡 클릭한 좌표(위도/경도)에 따른 지역 판별 및 해당 지역 물때 시각 적용
+            // 클릭한 좌표(위도/경도)에 따른 지역 판별
             let regionName = "제주 남부/서귀포";
-            let timeOffset = 0; // 분 단위 조시 보정
+            let timeOffset = 0;
 
             if (selectedLng < 126.8 && selectedLat > 33.5) {
                 regionName = "제주 북부/제주시";
@@ -184,7 +202,6 @@
                 timeOffset = -120;
             }
 
-            // 만조/간조 시간 계산 (기본 기준 시간 + 음력 일수 영향 + 지역별 조시 반영)
             let baseMins = (5 * 60 + (lunarDay * 50) + timeOffset) % 1440;
             if (baseMins < 0) baseMins += 1440;
 
@@ -195,11 +212,10 @@
             };
 
             const high1 = formatTime(baseMins);
-            const low1 = formatTime(baseMins + 372);  // 약 6시간 12분 후
-            const high2 = formatTime(baseMins + 744); // 약 12시간 24분 후
-            const low2 = formatTime(baseMins + 1116); // 약 18시간 36분 후
+            const low1 = formatTime(baseMins + 372);
+            const high2 = formatTime(baseMins + 744);
+            const low2 = formatTime(baseMins + 1116);
 
-            // 화면 출력
             document.getElementById('lunar-display').innerHTML = `
                 📍 <b>포인트 지역:</b> <span style="color:#e67e22; font-weight:bold;">${regionName}</span><br>
                 📅 <b>양력:</b> ${year}년 ${month}월 ${day}일 | 🌙 <b>음력:</b> ${lunarMonth}월 ${lunarDay}일<br>
@@ -224,10 +240,17 @@
         }
 
         function saveRecord() {
-            const infoText = document.getElementById('lunar-display').innerText.replace(/\n/g, ' / ');
+            const date = document.getElementById('record-date').value;
+            const count = document.getElementById('catch-count').value.trim();
             const memo = document.getElementById('record-memo').value.trim();
 
-            alert(`[조과 기록 저장 완료]\n${infoText}\n- 메모: ${memo || "없음"}`);
+            if (!count) {
+                alert("조과(마릿수)를 입력해주세요!");
+                document.getElementById('catch-count').focus();
+                return;
+            }
+
+            alert(`[조과 기록 저장 완료]\n- 날짜: ${date}\n- 조과: ${count}마리\n- 메모: ${memo || "없음"}`);
             closePanel();
         }
     </script>
