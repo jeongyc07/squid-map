@@ -3,21 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🦑 무늬오징어 포인트 맵</title>
+    <title>🦑 무늬오징어 조과 & 포인트 맵</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { width: 100%; height: 100%; overflow: hidden; }
+        html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Apple SD Gothic Neo', sans-serif; }
+        
+        .main-container { width: 100vw; height: 100vh; position: relative; }
         #map { width: 100%; height: 100%; }
+
+        /* 우측 조과 기록 패널 (화면의 약 1/3 너비, 기본 숨김) */
+        #record-panel {
+            position: absolute; right: 0; top: 0; width: 33.333%; height: 100%;
+            background: #ffffff; border-left: 1px solid #ddd; box-shadow: -4px 0 15px rgba(0,0,0,0.15);
+            z-index: 10; padding: 25px; display: flex; flex-direction: column; gap: 15px;
+            transform: translateX(100%); transition: transform 0.3s ease;
+        }
+        #record-panel.open { transform: translateX(0); }
+
+        .panel-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        .panel-header h2 { font-size: 18px; color: #2c3e50; }
+        .close-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: #888; }
+        .close-btn:hover { color: #333; }
+
+        .form-group { margin-bottom: 5px; }
+        .form-group label { display: block; font-size: 12px; font-weight: bold; color: #555; margin-bottom: 5px; }
+        .form-group input, .form-group textarea { 
+            width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; 
+        }
+        .form-group textarea { resize: vertical; height: 100px; }
+
+        .save-btn { 
+            width: 100%; background: #3498db; color: white; border: none; padding: 12px; 
+            border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.2s; 
+            margin-top: 10px;
+        }
+        .save-btn:hover { background: #2980b9; }
+
+        @media (max-width: 768px) {
+            #record-panel { width: 100%; } /* 모바일에서는 전체 화면 크기로 유연하게 조절 */
+        }
     </style>
+
     <!-- 카카오 지도 SDK -->
     <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=9f9339f1c455ac084a23d987ceb30e56"></script>
 </head>
 <body>
 
-    <!-- 지도 영역 -->
-    <div id="map"></div>
+    <div class="main-container">
+        <!-- 지도 영역 -->
+        <div id="map"></div>
+
+        <!-- 우측 조과 기록 패널 (1/3 크기) -->
+        <div id="record-panel" class="record-panel">
+            <div class="panel-header">
+                <h2>🦑 무늬오징어 조과 기록</h2>
+                <button class="close-btn" onclick="closePanel()">✕</button>
+            </div>
+            
+            <div class="form-group">
+                <label>선택한 위치 좌표</label>
+                <input type="text" id="coord-input" readonly style="background:#f8f9fa; color:#666;">
+            </div>
+            <div class="form-group">
+                <label>포인트 이름 / 장소명</label>
+                <input type="text" id="point-name" placeholder="예: ○○방파제 갯바위">
+            </div>
+            <div class="form-group">
+                <label>날짜</label>
+                <input type="date" id="record-date">
+            </div>
+            <div class="form-group">
+                <label>조과 및 채비 메모</label>
+                <textarea id="record-memo" placeholder="예: 3마리 포획 (대포알 사이즈), 3호 에기 금테, 조류 속도 좋음"></textarea>
+            </div>
+            <button class="save-btn" onclick="saveRecord()">조과 기록 저장하기</button>
+        </div>
+    </div>
 
     <script>
+        let map, currentMarker = null;
+        let selectedLat = null, selectedLng = null;
+
         document.addEventListener("DOMContentLoaded", function() {
             if (typeof kakao === 'undefined' || !kakao.maps) {
                 alert("카카오 지도 SDK 로드 실패!");
@@ -26,21 +92,71 @@
 
             const mapContainer = document.getElementById('map');
             const mapOption = { 
-                center: new kakao.maps.LatLng(33.38, 126.55), // 초기 중심 좌표 (제주도)
+                center: new kakao.maps.LatLng(33.38, 126.55), // 제주도 중심
                 level: 9, 
-                mapTypeId: kakao.maps.MapTypeId.HYBRID // 💡 위성 사진 + 지명/도로명이 함께 나오는 하이브리드 설정
+                mapTypeId: kakao.maps.MapTypeId.HYBRID // 위성 + 길/지명 하이브리드
             };
 
-            const map = new kakao.maps.Map(mapContainer, mapOption);
+            map = new kakao.maps.Map(mapContainer, mapOption);
 
-            // 지도 타입 컨트롤(일반/스카이뷰 전환 버튼) 추가
-            const mapTypeControl = new kakao.maps.MapTypeControl();
-            map.addControl(mapTypeControl, kakao.maps.ControlPosition.TOPLEFT);
+            // 지도 컨트롤 추가
+            map.addControl(new kakao.maps.MapTypeControl(), kakao.maps.ControlPosition.TOPLEFT);
+            map.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT);
 
-            // 줌 컨트롤 추가
-            const zoomControl = new kakao.maps.ZoomControl();
-            map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
+            // 오늘 날짜 기본 세팅
+            document.getElementById('record-date').value = new Date().toISOString().split('T')[0];
+
+            // 지도 클릭 이벤트
+            kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
+                const latlng = mouseEvent.latLng;
+                selectedLat = latlng.getLat();
+                selectedLng = latlng.getLng();
+
+                // 좌표 입력창에 값 표시
+                document.getElementById('coord-input').value = `위도: ${selectedLat.toFixed(4)}, 경도: ${selectedLng.toFixed(4)}`;
+                
+                // 입력 필드 초기화
+                document.getElementById('point-name').value = '';
+                document.getElementById('record-memo').value = '';
+
+                // 마커 표시
+                if (currentMarker) currentMarker.setMap(null);
+                currentMarker = new kakao.maps.Marker({ position: latlng });
+                currentMarker.setMap(map);
+
+                // 우측 1/3 패널 열기
+                openPanel();
+            });
         });
+
+        function openPanel() {
+            const panel = document.getElementById('record-panel');
+            panel.classList.add('open');
+        }
+
+        function closePanel() {
+            const panel = document.getElementById('record-panel');
+            panel.classList.remove('open');
+            if (currentMarker) {
+                currentMarker.setMap(null);
+                currentMarker = null;
+            }
+        }
+
+        function saveRecord() {
+            const name = document.getElementById('point-name').value.trim();
+            const date = document.getElementById('record-date').value;
+            const memo = document.getElementById('record-memo').value.trim();
+
+            if (!name) {
+                alert("포인트 이름을 입력해주세요!");
+                return;
+            }
+
+            // 임시 저장 확인 메시지
+            alert(`[${name}] 포인트 조과가 기록되었습니다!\n- 날짜: ${date}\n- 메모: ${memo || "없음"}`);
+            closePanel();
+        }
     </script>
 </body>
 </html>
