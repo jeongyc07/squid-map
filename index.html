@@ -84,7 +84,7 @@
     </div>
 
     <script>
-        // 국립해양조사원 주요 관측소 14개 목록
+        // 국립해양조사원 주요 관측소 목록
         const tideStations = [
             { code: "DT_0013", name: "서귀포", lat: 33.2400, lng: 126.5617 },
             { code: "DT_0004", name: "제주", lat: 33.5275, lng: 126.5431 },
@@ -101,8 +101,6 @@
             { code: "DT_0010", name: "포항", lat: 36.0522, lng: 129.3775 },
             { code: "DT_0028", name: "울릉도", lat: 37.4914, lng: 130.9125 }
         ];
-
-        let currentStationName = "";
 
         document.addEventListener("DOMContentLoaded", function() {
             if (typeof kakao === 'undefined' || !kakao.maps) {
@@ -130,12 +128,12 @@
 
                 document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
 
-                // 1. 날씨 데이터 갱신
+                // 1. 날씨 데이터 호출
                 getWeatherData(lat, lng);
 
-                // 2. 가장 가까운 관측소 탐색 후 정밀 물때 호출
+                // 2. 관측소 지정 후 KHOA 물때데이터 우회 호출
                 const nearestStation = findNearestStation(lat, lng);
-                getKhoaTideDataJSONP(nearestStation);
+                getKhoaTideDataProxy(nearestStation);
             });
         });
 
@@ -205,11 +203,10 @@
             return "☀️ 맑음";
         }
 
-        // 2. 정확한 YYYYMMDD 날짜 생성 후 해양조사원 데이터 호출
-        function getKhoaTideDataJSONP(station) {
+        // 2. 퍼블릭 프록시(allorigins)를 통해 CORS를 우회하여 KHOA 데이터 가져오기
+        function getKhoaTideDataProxy(station) {
             const tideContainer = document.getElementById('tide-container');
-            tideContainer.innerHTML = `<p class="obs-name">📍 인근 관측소: ${station.name} (${station.code})</p><p style='font-size:13px; color:#888;'>해양조사원 데이터 조회 중...</p>`;
-            currentStationName = station.name;
+            tideContainer.innerHTML = `<p class="obs-name">📍 인근 관측소: ${station.name} (${station.code})</p><p style='font-size:13px; color:#888;'>해양조사원 정밀 데이터 불러오는 중...</p>`;
 
             const now = new Date();
             const year = now.getFullYear();
@@ -218,54 +215,56 @@
             const dateStr = `${year}${month}${day}`;
 
             const serviceKey = "88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f";
-
-            const oldScript = document.getElementById('khoa-jsonp');
-            if (oldScript) oldScript.remove();
-
-            const script = document.createElement('script');
-            script.id = 'khoa-jsonp';
-            script.src = `https://www.khoa.go.kr/api/oceangrid/tideObsPreTab/search.do?ServiceKey=${serviceKey}&ObsCode=${station.code}&Date=${dateStr}&ResultType=json&callback=handleTideResponse`;
             
-            script.onerror = function() {
-                tideContainer.innerHTML = "<p style='font-size:13px; color:#e74c3c;'>해양조사원 서버 응답 지연 (다시 클릭해 주세요)</p>";
-            };
+            // KHOA 원본 주소
+            const targetApi = `https://www.khoa.go.kr/oceangrid/grid/api/tideObsPreTab/search.do?ServiceKey=${serviceKey}&ObsCode=${station.code}&Date=${dateStr}&ResultType=json`;
+            
+            // Open CORS Proxy 적용
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetApi)}`;
 
-            document.body.appendChild(script);
-        }
+            fetch(proxyUrl)
+                .then(res => {
+                    if (res.ok) return res.json();
+                    throw new Error('Network response was not ok.');
+                })
+                .then(data => {
+                    // allorigins 프록시는 응답 데이터를 contents 항목에 문자열 형태로 담아 줍니다.
+                    const parsedData = JSON.parse(data.contents);
+                    let tideList = [];
 
-        // KHOA 데이터 응답 처리
-        window.handleTideResponse = function(data) {
-            const tideContainer = document.getElementById('tide-container');
-            let tideList = [];
+                    if (parsedData && parsedData.result && parsedData.result.data) {
+                        tideList = parsedData.result.data;
+                    }
 
-            if (data && data.result && data.result.data) {
-                tideList = data.result.data;
-            }
+                    if (tideList.length > 0) {
+                        const todayTitle = `${month}월 ${day}일`;
+                        let html = `<p class="obs-name">📍 기준 관측소: ${station.name} (${todayTitle} 기준)</p><ul class="tide-list">`;
+                        
+                        tideList.forEach(item => {
+                            const isHigh = item.hl_type.includes("고조") || item.hl_type.includes("만조");
+                            const typeClass = isHigh ? "tide-high" : "tide-low";
+                            const typeName = isHigh ? "▲ 만조" : "▼ 간조";
+                            const timeOnly = item.tide_time ? item.tide_time.split(" ")[1] : "-";
 
-            if (tideList.length > 0) {
-                const todayTitle = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
-                let html = `<p class="obs-name">📍 기준 관측소: ${currentStationName} (${todayTitle} 기준)</p><ul class="tide-list">`;
-                
-                tideList.forEach(item => {
-                    const isHigh = item.hl_type.includes("고조") || item.hl_type.includes("만조");
-                    const typeClass = isHigh ? "tide-high" : "tide-low";
-                    const typeName = isHigh ? "▲ 만조" : "▼ 간조";
-                    const timeOnly = item.tide_time ? item.tide_time.split(" ")[1] : "-";
-
-                    html += `
-                        <li class="tide-item">
-                            <span class="${typeClass}">${typeName}</span>
-                            <span>${timeOnly}</span>
-                            <span>${item.tide_level} cm</span>
-                        </li>
-                    `;
+                            html += `
+                                <li class="tide-item">
+                                    <span class="${typeClass}">${typeName}</span>
+                                    <span>${timeOnly}</span>
+                                    <span>${item.tide_level} cm</span>
+                                </li>
+                            `;
+                        });
+                        html += '</ul>';
+                        tideContainer.innerHTML = html;
+                    } else {
+                        tideContainer.innerHTML = `<p class="obs-name">📍 기준 관측소: ${station.name}</p><p style='font-size:13px; color:#888;'>오늘의 물때 데이터를 찾을 수 없습니다.</p>`;
+                    }
+                })
+                .catch(err => {
+                    console.error("해양조사원 데이터 로딩 실패:", err);
+                    tideContainer.innerHTML = "<p style='font-size:13px; color:#e74c3c;'>물때 정보를 불러올 수 없습니다. (네트워크 연결 확인 필요)</p>";
                 });
-                html += '</ul>';
-                tideContainer.innerHTML = html;
-            } else {
-                tideContainer.innerHTML = `<p class="obs-name">📍 기준 관측소: ${currentStationName}</p><p style='font-size:13px; color:#888;'>오늘의 물때 데이터를 불러올 수 없습니다.</p>`;
-            }
-        };
+        }
     </script>
 </body>
 </html>
