@@ -8,10 +8,8 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { display: flex; height: 100vh; font-family: 'Apple SD Gothic Neo', sans-serif; background-color: #f4f6f8; }
         
-        /* 왼쪽 2/3 지도 */
         #map { width: 67%; height: 100%; }
         
-        /* 오른쪽 1/3 정보 창 */
         #info-panel { 
             width: 33%; height: 100%; padding: 20px; 
             background: #ffffff; border-left: 1px solid #e0e0e0; overflow-y: auto;
@@ -27,7 +25,6 @@
         .card h3 { font-size: 15px; color: #2c3e50; margin-bottom: 10px; border-bottom: 2px solid #3498db; padding-bottom: 5px; display: inline-block; }
         .info-row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 14px; }
         
-        /* 풍향 화살표 */
         .wind-arrow { display: inline-block; font-size: 24px; font-weight: bold; color: #e74c3c; transition: transform 0.3s ease; }
         .weather-badge { font-weight: bold; color: #2980b9; }
 
@@ -36,15 +33,14 @@
         .tide-high { color: #e74c3c; font-weight: bold; }
         .tide-low { color: #2980b9; font-weight: bold; }
 
-        /* 모바일 대응 (반응형) */
         @media (max-width: 768px) {
             body { flex-direction: column; }
             #map { width: 100%; height: 55vh; }
             #info-panel { width: 100%; height: 45vh; }
         }
     </style>
-    <!-- 카카오 지도 API (JavaScript 키) -->
-    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=9f9339f1c455ac084a23d987ceb30e56"></script>
+    <!-- 카카오 지도 SDK (autoload=false 옵션 추가) -->
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=9f9339f1c455ac084a23d987ceb30e56&autoload=false"></script>
 </head>
 <body>
 
@@ -85,34 +81,36 @@
         const KMA_API_KEY = "88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f";
         const KHOA_API_KEY = "88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f";
 
-        const mapContainer = document.getElementById('map');
-        const mapOption = { 
-            center: new kakao.maps.LatLng(33.2483, 126.5641), // 제주 서귀포 연안 기준
-            level: 4 
-        };
-        const map = new kakao.maps.Map(mapContainer, mapOption);
-        let marker = null;
+        // 카카오 지도 API가 완전히 로드된 후 execution
+        kakao.maps.load(function() {
+            const mapContainer = document.getElementById('map');
+            const mapOption = { 
+                center: new kakao.maps.LatLng(33.2483, 126.5641), 
+                level: 4 
+            };
+            const map = new kakao.maps.Map(mapContainer, mapOption);
+            let marker = null;
 
-        kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
-            const latlng = mouseEvent.latLng;
-            const lat = latlng.getLat();
-            const lng = latlng.getLng();
+            kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
+                const latlng = mouseEvent.latLng;
+                const lat = latlng.getLat();
+                const lng = latlng.getLng();
 
-            if (marker) marker.setMap(null);
-            marker = new kakao.maps.Marker({ position: latlng });
-            marker.setMap(map);
+                if (marker) marker.setMap(null);
+                marker = new kakao.maps.Marker({ position: latlng });
+                marker.setMap(map);
 
-            document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
+                document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
 
-            const grid = dfs_xy_conv("toXY", lat, lng);
-            getKmaWeatherData(grid.x, grid.y);
-            getTideData(lat, lng);
+                const grid = dfs_xy_conv("toXY", lat, lng);
+                getKmaWeatherData(grid.x, grid.y);
+                getTideData(lat, lng);
+            });
         });
 
-        // 현재 시각 기준 1시간 전 base_time/base_date 구하기
         function getBaseTime() {
             const now = new Date();
-            now.setHours(now.getHours() - 1); // 1시간 전
+            now.setHours(now.getHours() - 1);
             const year = now.getFullYear();
             const month = ('0' + (now.getMonth() + 1)).slice(-2);
             const day = ('0' + now.getDate()).slice(-2);
@@ -120,7 +118,6 @@
             return { baseDate: `${year}${month}${day}`, baseTime: hours };
         }
 
-        // 기상청 날씨/바람 조회
         function getKmaWeatherData(nx, ny) {
             const { baseDate, baseTime } = getBaseTime();
             const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst?serviceKey=${KMA_API_KEY}&pageNo=1&numOfRows=100&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${nx}&ny=${ny}`;
@@ -154,7 +151,6 @@
                 });
         }
 
-        // 국립해양조사원 물때 조회
         function getTideData(lat, lng) {
             const today = new Date();
             const year = today.getFullYear();
@@ -162,7 +158,7 @@
             const day = ('0' + today.getDate()).slice(-2);
             const dateStr = `${year}${month}${day}`;
 
-            const obsCode = "DT_0013"; // 서귀포 관측소 기준
+            const obsCode = "DT_0013";
             const url = `https://www.khoa.go.kr/api/oceangrid/tideObsPreTab/search.do?ServiceKey=${KHOA_API_KEY}&ObsCode=${obsCode}&Date=${dateStr}&ResultType=json`;
 
             fetch(url)
@@ -198,7 +194,6 @@
                 });
         }
 
-        // 위경도 -> 기상청 격자(X, Y) 좌표 변환
         function dfs_xy_conv(code, v1, v2) {
             const RE = 6371.00877, GRID = 5.0, SLAT1 = 30.0, SLAT2 = 60.0, OLON = 126.0, OLAT = 38.0, XO = 43, YO = 136;
             const DEGRAD = Math.PI / 180.0;
