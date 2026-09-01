@@ -32,9 +32,9 @@
         }
         .form-group textarea { resize: vertical; height: 120px; }
 
-        /* 음력 표시 스타일 */
-        #lunar-display {
-            font-size: 12px; color: #27ae60; background: #e8f8f5; padding: 10px; border-radius: 4px; margin-top: 5px; font-weight: bold; line-height: 1.4;
+        /* 날짜 안내 스타일 */
+        #date-info {
+            font-size: 12px; color: #2980b9; background: #ebf5fb; padding: 10px; border-radius: 6px; margin-top: 5px; line-height: 1.5;
         }
 
         .save-btn { 
@@ -51,8 +51,6 @@
 
     <!-- 카카오 지도 SDK -->
     <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=9f9339f1c455ac084a23d987ceb30e56"></script>
-    <!-- 음력 변환 라이브러리 (lunar-javascript) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lunar-javascript/1.7.7/lunar.js"></script>
 </head>
 <body>
 
@@ -68,9 +66,9 @@
             </div>
             
             <div class="form-group">
-                <label>날짜 선택</label>
-                <input type="date" id="record-date" onchange="updateLunarDate()">
-                <div id="lunar-display">음력 정보를 불러오는 중...</div>
+                <label>날짜 선택 (기본 달력)</label>
+                <input type="date" id="record-date" onchange="displaySelectedDate()">
+                <div id="date-info">날짜를 선택해주세요.</div>
             </div>
 
             <div class="form-group">
@@ -83,7 +81,6 @@
 
     <script>
         let map, currentMarker = null;
-        let selectedLat = null, selectedLng = null;
 
         document.addEventListener("DOMContentLoaded", function() {
             try {
@@ -107,14 +104,11 @@
                 // 오늘 날짜 세팅
                 const today = new Date().toISOString().split('T')[0];
                 document.getElementById('record-date').value = today;
-                updateLunarDate();
+                displaySelectedDate();
 
                 // 지도 클릭 이벤트
                 kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
                     const latlng = mouseEvent.latLng;
-                    selectedLat = latlng.getLat();
-                    selectedLng = latlng.getLng();
-                    
                     document.getElementById('record-memo').value = '';
 
                     if (currentMarker) currentMarker.setMap(null);
@@ -128,27 +122,16 @@
             }
         });
 
-        // 양력을 음력으로 변환하여 표시하는 함수
-        function updateLunarDate() {
+        // 선택한 날짜 표시 함수
+        function displaySelectedDate() {
             const dateVal = document.getElementById('record-date').value;
             if (!dateVal) return;
 
-            const [year, month, day] = dateVal.split('-').map(Number);
+            const [year, month, day] = dateVal.split('-');
             
-            try {
-                // 양력 객체 생성 후 음력 정보 추출
-                const solar = Solar.fromYmd(year, month, day);
-                const lunar = solar.getLunar();
-                
-                const leapStr = lunar.getLeapMonth() > 0 ? " (윤달)" : "";
-                const lunarStr = `음력 ${lunar.getYear()}년 ${lunar.getMonthInChinese()}월 ${lunar.getDayInChinese()}일${leapStr}`;
-                const ganjiStr = `${lunar.getYearInGanZhi()}년 ${lunar.getMonthInGanZhi()}월 ${lunar.getDayInGanZhi()}일`;
-
-                document.getElementById('lunar-display').innerHTML = 
-                    `📅 양력: ${year}년 ${month}월 ${day}일<br>🌙 ${lunarStr} (${ganjiStr})`;
-            } catch (e) {
-                document.getElementById('lunar-display').innerText = "음력 변환 중 오류가 발생했습니다.";
-            }
+            // 사용자가 편리하게 달력으로 선택한 날짜 정보를 보기 좋게 출력
+            document.getElementById('date-info').innerHTML = 
+                `📌 선택된 날짜: <b>${year}년 ${month}월 ${day}일</b><br><span style="font-size:11px; color:#555;">(필요시 음력/물때는 아래 메모란에 함께 기입하세요)</span>`;
         }
 
         function openPanel() {
@@ -167,10 +150,9 @@
 
         function saveRecord() {
             const date = document.getElementById('record-date').value;
-            const lunarText = document.getElementById('lunar-display').innerText.replace(/\n/g, ' / ');
             const memo = document.getElementById('record-memo').value.trim();
 
-            alert(`[조과 기록 완료]\n- ${lunarText}\n- 메모: ${memo || "없음"}`);
+            alert(`[조과 기록 완료]\n- 날짜: ${date}\n- 메모: ${memo || "없음"}`);
             closePanel();
         }
     </script>
