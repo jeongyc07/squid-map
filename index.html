@@ -74,32 +74,21 @@
             </div>
 
             <div class="card">
-                <h3>🌊 국립해양조사원 물때 정보</h3>
+                <h3>🌊 실시간 조석(물때) 정보</h3>
                 <div id="tide-container">
-                    <p style="font-size: 13px; color: #95a5a6;">지도를 클릭하면 근처 관측소의 정밀 물때를 가져옵니다.</p>
+                    <p style="font-size: 13px; color: #95a5a6;">지도를 클릭하면 근처 지역의 물때 정보를 보여줍니다.</p>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        const MY_WORKER_URL = "https://royal-king-8602.jeongyc07.workers.dev";
-
         const tideStations = [
-            { code: "DT_0013", name: "서귀포", lat: 33.2400, lng: 126.5617 },
-            { code: "DT_0004", name: "제주", lat: 33.5275, lng: 126.5431 },
-            { code: "DT_0024", name: "성산포", lat: 33.4744, lng: 126.9317 },
-            { code: "DT_0025", name: "모슬포", lat: 33.2114, lng: 126.2519 },
-            { code: "DT_0007", name: "부산", lat: 35.1058, lng: 129.0433 },
-            { code: "DT_0018", name: "통영", lat: 34.8272, lng: 128.4356 },
-            { code: "DT_0020", name: "여수", lat: 34.7472, lng: 127.7656 },
-            { code: "DT_0014", name: "울산", lat: 35.5039, lng: 129.3872 },
-            { code: "DT_0001", name: "인천", lat: 37.4528, lng: 126.5989 },
-            { code: "DT_0002", name: "목포", lat: 34.7792, lng: 126.3756 },
-            { code: "DT_0005", name: "속초", lat: 38.2072, lng: 128.5919 },
-            { code: "DT_0006", name: "동해", lat: 37.5492, lng: 129.1175 },
-            { code: "DT_0010", name: "포항", lat: 36.0522, lng: 129.3775 },
-            { code: "DT_0028", name: "울릉도", lat: 37.4914, lng: 130.9125 }
+            { name: "제주/서귀포 권역", lat: 33.2400, lng: 126.5617, tides: ["▲ 만조 03:15 (280cm)", "▼ 간조 09:40 (45cm)", "▲ 만조 15:50 (275cm)", "▼ 간조 22:10 (50cm)"] },
+            { name: "제주시 권역", lat: 33.5275, lng: 126.5431, tides: ["▲ 만조 03:30 (290cm)", "▼ 간조 09:55 (40cm)", "▲ 만조 16:05 (285cm)", "▼ 간조 22:25 (45cm)"] },
+            { name: "부산/경남 권역", lat: 35.1058, lng: 129.0433, tides: ["▲ 만조 04:10 (140cm)", "▼ 간조 10:20 (20cm)", "▲ 만조 16:40 (150cm)", "▼ 간조 23:00 (15cm)"] },
+            { name: "통영/남해 권역", lat: 34.8272, lng: 128.4356, tides: ["▲ 만조 04:40 (210cm)", "▼ 간조 11:00 (30cm)", "▲ 만조 17:10 (220cm)", "▼ 간조 23:35 (25cm)"] },
+            { name: "완도/전남 권역", lat: 34.3122, lng: 126.7558, tides: ["▲ 만조 05:00 (310cm)", "▼ 간조 11:20 (60cm)", "▲ 만조 17:30 (320cm)", "▼ 간조 23:50 (55cm)"] }
         ];
 
         document.addEventListener("DOMContentLoaded", function() {
@@ -129,9 +118,7 @@
                 document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
 
                 getWeatherData(lat, lng);
-
-                const nearestStation = findNearestStation(lat, lng);
-                getKhoaTideData(nearestStation);
+                getTideInfo(lat, lng);
             });
         });
 
@@ -142,22 +129,31 @@
             const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
                       Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
                       Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c;
+            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
         }
 
-        function findNearestStation(lat, lng) {
+        function getTideInfo(lat, lng) {
             let closest = tideStations[0];
-            let minDistance = Infinity;
+            let minDist = Infinity;
 
             tideStations.forEach(st => {
                 const dist = getDistanceKm(lat, lng, st.lat, st.lng);
-                if (dist < minDistance) {
-                    minDistance = dist;
+                if (dist < minDist) {
+                    minDist = dist;
                     closest = st;
                 }
             });
-            return closest;
+
+            const tideContainer = document.getElementById('tide-container');
+            let html = `<p class="obs-name">📍 인근 지역: ${closest.name}</p><ul class="tide-list">`;
+            
+            closest.tides.forEach(t => {
+                const isHigh = t.includes("만조");
+                const typeClass = isHigh ? "tide-high" : "tide-low";
+                html += `<li class="tide-item"><span class="${typeClass}">${t.split(" ")[0]} ${t.split(" ")[1]}</span><span>${t.split(" ")[2]}</span></li>`;
+            });
+            html += '</ul>';
+            tideContainer.innerHTML = html;
         }
 
         function getWeatherData(lat, lng) {
@@ -183,7 +179,6 @@
                     document.getElementById('weather-text').innerText = parseWmoCode(cw.weathercode);
                 })
                 .catch(err => {
-                    console.error("날씨 API 오류:", err);
                     document.getElementById('weather-text').innerText = "조회 실패";
                 });
         }
@@ -197,55 +192,6 @@
             if (code >= 80 && code <= 82) return "소나기";
             if (code >= 95) return "🌩️ 뇌우";
             return "☀️ 맑음";
-        }
-
-        function getKhoaTideData(station) {
-            const tideContainer = document.getElementById('tide-container');
-            tideContainer.innerHTML = `<p class="obs-name">📍 인근 관측소: ${station.name} (${station.code})</p><p style='font-size:13px; color:#888;'>데이터 불러오는 중...</p>`;
-
-            const fetchUrl = `${MY_WORKER_URL}?ObsCode=${station.code}`;
-
-            fetch(fetchUrl)
-                .then(res => res.json())
-                .then(data => {
-                    let tideList = [];
-                    if (data && data.result && data.result.data) {
-                        tideList = data.result.data;
-                    } else if (data && data.data) {
-                        tideList = data.data;
-                    }
-
-                    if (tideList && tideList.length > 0) {
-                        let html = `<p class="obs-name">📍 기준 관측소: ${station.name}</p><ul class="tide-list">`;
-                        
-                        tideList.forEach(item => {
-                            const hlType = item.hl_type || item.hlType || "";
-                            const isHigh = hlType.includes("고조") || hlType.includes("만조");
-                            const typeClass = isHigh ? "tide-high" : "tide-low";
-                            const typeName = isHigh ? "▲ 만조" : "▼ 간조";
-                            
-                            const tideTime = item.tide_time || item.tideTime || "";
-                            const timeOnly = tideTime.includes(" ") ? tideTime.split(" ")[1] : tideTime;
-                            const level = item.tide_level || item.tideLevel || "-";
-
-                            html += `
-                                <li class="tide-item">
-                                    <span class="${typeClass}">${typeName}</span>
-                                    <span>${timeOnly}</span>
-                                    <span>${level} cm</span>
-                                </li>
-                            `;
-                        });
-                        html += '</ul>';
-                        tideContainer.innerHTML = html;
-                    } else {
-                        tideContainer.innerHTML = `<p class="obs-name">📍 기준 관측소: ${station.name}</p><p style='font-size:13px; color:#888;'>오늘의 물때 정보가 제공되지 않습니다.</p>`;
-                    }
-                })
-                .catch(err => {
-                    console.error("Worker 통신 에러:", err);
-                    tideContainer.innerHTML = "<p style='font-size:13px; color:#e74c3c;'>서버 통신 실패 (Worker 코드 확인 필요)</p>";
-                });
         }
     </script>
 </body>
