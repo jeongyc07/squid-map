@@ -4,17 +4,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>무늬오징어 포인트 맵</title>
-    <!-- 파비콘 404 에러 방지 -->
     <link rel="shortcut icon" href="#">
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { display: flex; height: 100vh; font-family: 'Apple SD Gothic Neo', sans-serif; background-color: #f4f6f8; }
-        
-        #map { width: 67%; height: 100%; }
-        
-        #info-panel { 
-            width: 33%; height: 100%; padding: 20px; 
-            background: #ffffff; border-left: 1px solid #e0e0e0; overflow-y: auto;
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Apple SD Gothic Neo', sans-serif;
+        }
+
+        .main-container {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #map {
+            width: 67%;
+            height: 100vh; /* 지도 높이 명시적 지정 */
+            background-color: #e5e3df; /* 지도가 로드되기 전 영역 표시 */
+        }
+
+        #info-panel {
+            width: 33%;
+            height: 100vh;
+            padding: 20px;
+            background: #ffffff;
+            border-left: 1px solid #e0e0e0;
+            overflow-y: auto;
         }
 
         h2 { font-size: 20px; color: #1a252f; margin-bottom: 4px; }
@@ -36,7 +55,7 @@
         .tide-low { color: #2980b9; font-weight: bold; }
 
         @media (max-width: 768px) {
-            body { flex-direction: column; }
+            .main-container { flex-direction: column; }
             #map { width: 100%; height: 55vh; }
             #info-panel { width: 100%; height: 45vh; }
         }
@@ -44,69 +63,82 @@
 </head>
 <body>
 
-    <div id="map"></div>
+    <div class="main-container">
+        <!-- 지도 영역 -->
+        <div id="map"></div>
 
-    <div id="info-panel">
-        <h2>무늬오징어 포인트 정보</h2>
-        <p id="coords" class="sub-text">지도를 클릭하여 포인트를 지정하세요.</p>
-        
-        <div class="card">
-            <h3>☀️ 날씨 & 바람 (기상청)</h3>
-            <div class="info-row">
-                <span>날씨</span>
-                <span id="weather-text" class="weather-badge">선택 대기</span>
+        <!-- 우측 정보 패널 -->
+        <div id="info-panel">
+            <h2>무늬오징어 포인트 정보</h2>
+            <p id="coords" class="sub-text">지도를 클릭하여 포인트를 지정하세요.</p>
+            
+            <div class="card">
+                <h3>☀️ 날씨 & 바람 (기상청)</h3>
+                <div class="info-row">
+                    <span>날씨</span>
+                    <span id="weather-text" class="weather-badge">선택 대기</span>
+                </div>
+                <div class="info-row">
+                    <span>풍속</span>
+                    <span><b id="wind-speed" style="font-size:18px; color:#d35400;">-</b> m/s</span>
+                </div>
+                <div class="info-row">
+                    <span>풍향</span>
+                    <div>
+                        <span id="wind-arrow" class="wind-arrow">↑</span> 
+                        <span id="wind-deg" style="font-size:12px; color:#7f8c8d;">(-°)</span>
+                    </div>
+                </div>
             </div>
-            <div class="info-row">
-                <span>풍속</span>
-                <span><b id="wind-speed" style="font-size:18px; color:#d35400;">-</b> m/s</span>
-            </div>
-            <div class="info-row">
-                <span>풍향</span>
-                <div>
-                    <span id="wind-arrow" class="wind-arrow">↑</span> 
-                    <span id="wind-deg" style="font-size:12px; color:#7f8c8d;">(-°)</span>
+
+            <div class="card">
+                <h3>🌊 만조 / 간조 정보 (해양조사원)</h3>
+                <div id="tide-container">
+                    <p style="font-size: 13px; color: #95a5a6;">지도를 클릭하면 해당 지역 물때를 불러옵니다.</p>
                 </div>
             </div>
         </div>
-
-        <div class="card">
-            <h3>🌊 만조 / 간조 정보 (해양조사원)</h3>
-            <div id="tide-container">
-                <p style="font-size: 13px; color: #95a5a6;">지도를 클릭하면 해당 지역 물때를 불러옵니다.</p>
-            </div>
-        </div>
     </div>
+
+    <!-- 카카오 SDK 불러오기 -->
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=9f9339f1c455ac084a23d987ceb30e56&autoload=false"></script>
 
     <script>
         const KMA_API_KEY = "88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f";
         const KHOA_API_KEY = "88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f";
 
-        // 카카오 SDK 로드가 끝난 후 실행될 지도 초기화 함수
+        // 페이지 전체 로드가 완료되면 지도 실행
+        window.onload = function() {
+            if (typeof kakao !== 'undefined' && kakao.maps) {
+                kakao.maps.load(initMap);
+            } else {
+                console.error("카카오 지도 SDK를 불러오지 못했습니다.");
+            }
+        };
+
         function initMap() {
-            kakao.maps.load(function() {
-                const mapContainer = document.getElementById('map');
-                const mapOption = { 
-                    center: new kakao.maps.LatLng(33.2483, 126.5641), 
-                    level: 4 
-                };
-                const map = new kakao.maps.Map(mapContainer, mapOption);
-                let marker = null;
+            const mapContainer = document.getElementById('map');
+            const mapOption = { 
+                center: new kakao.maps.LatLng(33.2483, 126.5641), 
+                level: 4 
+            };
+            const map = new kakao.maps.Map(mapContainer, mapOption);
+            let marker = null;
 
-                kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
-                    const latlng = mouseEvent.latLng;
-                    const lat = latlng.getLat();
-                    const lng = latlng.getLng();
+            kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
+                const latlng = mouseEvent.latLng;
+                const lat = latlng.getLat();
+                const lng = latlng.getLng();
 
-                    if (marker) marker.setMap(null);
-                    marker = new kakao.maps.Marker({ position: latlng });
-                    marker.setMap(map);
+                if (marker) marker.setMap(null);
+                marker = new kakao.maps.Marker({ position: latlng });
+                marker.setMap(map);
 
-                    document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
+                document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
 
-                    const grid = dfs_xy_conv("toXY", lat, lng);
-                    getKmaWeatherData(grid.x, grid.y);
-                    getTideData(lat, lng);
-                });
+                const grid = dfs_xy_conv("toXY", lat, lng);
+                getKmaWeatherData(grid.x, grid.y);
+                getTideData(lat, lng);
             });
         }
 
@@ -221,8 +253,5 @@
             return rs;
         }
     </script>
-
-    <!-- 스크립트 파일이 완전히 다운로드된 직후 initMap 함수 호출 -->
-    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=9f9339f1c455ac084a23d987ceb30e56&autoload=false" onload="initMap()"></script>
 </body>
 </html>
