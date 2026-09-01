@@ -38,13 +38,11 @@
             border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.2s; 
         }
         .btn:hover { background: #2980b9; }
-        .btn-sub { background: #27ae60; }
-        .btn-sub:hover { background: #219653; }
         .btn-warning { background: #f39c12; color: white; }
         .btn-warning:hover { background: #d68910; }
         
         .btn-group { display: flex; gap: 5px; margin-top: 5px; }
-        .btn-small { padding: 4px 8px; font-size: 11px; border-radius: 4px; border: none; cursor: pointer; color: white; font-weight: bold; }
+        .btn-small { padding: 3px 6px; font-size: 10px; border-radius: 3px; border: none; cursor: pointer; color: white; font-weight: bold; }
         .btn-edit { background: #f39c12; }
         .btn-add-rec { background: #27ae60; }
         .btn-danger { background: #e74c3c; }
@@ -63,9 +61,11 @@
         .point-actions { display: flex; gap: 4px; }
 
         /* 조과 히스토리 박스 */
-        .history-box { background: #fffbe6; border: 1px solid #ffe58f; border-radius: 6px; padding: 8px; font-size: 12px; margin-top: 4px; }
+        .history-box { background: #fffbe6; border: 1px solid #ffe58f; border-radius: 6px; padding: 8px; font-size: 12px; margin-top: 4px; display: flex; flex-direction: column; gap: 4px; }
         .history-item { border-bottom: 1px dashed #e4d00a; padding: 4px 0; display: flex; justify-content: space-between; align-items: center; }
         .history-item:last-child { border-bottom: none; }
+        .history-content { flex-grow: 1; margin-right: 5px; }
+        .history-btns { display: flex; gap: 3px; }
 
         @media (max-width: 768px) {
             .main-container { flex-direction: column; }
@@ -132,7 +132,7 @@
     <script>
         let map, currentMarker = null;
         let selectedLat = null, selectedLng = null;
-        let savedPoints = JSON.parse(localStorage.getItem('squid_points_v3') || '[]');
+        let savedPoints = JSON.parse(localStorage.getItem('squid_points_v4') || '[]');
         let mapMarkers = [];
 
         document.addEventListener("DOMContentLoaded", function() {
@@ -153,7 +153,6 @@
             document.getElementById('selected-date').value = todayStr;
             updateCalendarInfo();
 
-            // 지도 클릭 시 새로운 포인트 위치 지정
             kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
                 const latlng = mouseEvent.latLng;
                 selectedLat = latlng.getLat();
@@ -169,7 +168,6 @@
             renderPointList();
         });
 
-        // 음력 및 물때 계산
         function updateCalendarInfo() {
             const dateVal = document.getElementById('selected-date').value;
             if (!dateVal) return;
@@ -196,7 +194,6 @@
             document.getElementById('calendar-result').innerHTML = resultHtml;
         }
 
-        // 포인트 저장 또는 수정 처리
         function savePoint() {
             const editId = document.getElementById('edit-point-id').value;
             const name = document.getElementById('point-name').value.trim();
@@ -209,7 +206,6 @@
             }
 
             if (editId) {
-                // [수정 모드] 기존 포인트 정보 업데이트
                 const point = savedPoints.find(p => p.id == editId);
                 if (point) {
                     point.name = name;
@@ -217,15 +213,13 @@
                         point.lat = selectedLat;
                         point.lng = selectedLng;
                     }
-                    // 메모가 입력되어 있다면 새로운 기록으로 추가
                     if (memo) {
-                        point.records.push({ date: date, memo: memo });
+                        point.records.push({ id: Date.now(), date: date, memo: memo });
                         point.records.sort((a, b) => new Date(b.date) - new Date(a.date));
                     }
                 }
                 alert("포인트 정보가 수정되었습니다!");
             } else {
-                // [신규 등록 모드]
                 if (!selectedLat || !selectedLng) {
                     alert("새 포인트를 저장하려면 지도를 클릭해 위치를 지정해주세요!");
                     return;
@@ -237,36 +231,74 @@
                     lat: selectedLat,
                     lng: selectedLng,
                     records: [
-                        { date: date, memo: memo || "기록된 메모 없음" }
+                        { id: Date.now(), date: date, memo: memo || "기록된 메모 없음" }
                     ]
                 };
                 savedPoints.push(newPoint);
                 alert("새로운 포인트가 저장되었습니다!");
             }
 
-            localStorage.setItem('squid_points_v3', JSON.stringify(savedPoints));
+            localStorage.setItem('squid_points_v4', JSON.stringify(savedPoints));
             resetForm();
             renderPointList();
         }
 
-        // 특정 포인트에 기록만 바로 추가하는 함수 (목록 버튼용)
         function quickAddRecord(id) {
             const point = savedPoints.find(p => p.id === id);
             if (!point) return;
 
             const memo = prompt(`[${point.name}] 포인트에 추가할 조과/메모를 입력하세요:`);
-            if (memo === null) return; // 취소 버튼 누름
+            if (memo === null) return;
 
             const date = document.getElementById('selected-date').value;
-            point.records.push({ date: date, memo: memo || "기록된 메모 없음" });
+            point.records.push({ id: Date.now(), date: date, memo: memo || "기록된 메모 없음" });
             point.records.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-            localStorage.setItem('squid_points_v3', JSON.stringify(savedPoints));
+            localStorage.setItem('squid_points_v4', JSON.stringify(savedPoints));
             renderPointList();
             alert("기록이 추가되었습니다!");
         }
 
-        // 수정 모드로 폼 전환
+        // 개별 히스토리 수정
+        function editRecord(pointId, recordId) {
+            const point = savedPoints.find(p => p.id === pointId);
+            if (!point) return;
+
+            const record = point.records.find(r => r.id === recordId);
+            if (!record) return;
+
+            const newMemo = prompt("수정할 조과/메모 내용을 입력하세요:", record.memo);
+            if (newMemo === null) return;
+
+            const newDate = prompt("수정할 날짜(YYYY-MM-DD)를 입력하세요:", record.date);
+            if (newDate === null) return;
+
+            record.memo = newMemo || "기록된 메모 없음";
+            if (newDate) record.date = newDate;
+
+            point.records.sort((a, b) => new Date(b.date) - new Date(a.date));
+            localStorage.setItem('squid_points_v4', JSON.stringify(savedPoints));
+            renderPointList();
+            alert("히스토리가 수정되었습니다!");
+        }
+
+        // 개별 히스토리 삭제
+        function deleteRecord(pointId, recordId) {
+            const point = savedPoints.find(p => p.id === pointId);
+            if (!point) return;
+
+            if (point.records.length <= 1) {
+                alert("포인트에는 최소 1개의 기록이 있어야 합니다. 기록을 삭제하려면 포인트를 통째로 삭제해주세요.");
+                return;
+            }
+
+            if (confirm("이 출조 히스토리를 정말 삭제하시겠습니까?")) {
+                point.records = point.records.filter(r => r.id !== recordId);
+                localStorage.setItem('squid_points_v4', JSON.stringify(savedPoints));
+                renderPointList();
+            }
+        }
+
         function editPoint(id) {
             const point = savedPoints.find(p => p.id === id);
             if (!point) return;
@@ -284,7 +316,6 @@
             document.getElementById('btn-submit').innerText = "수정 완료";
             document.getElementById('btn-cancel-edit').style.display = 'block';
 
-            // 지도 중심 이동
             const moveLatLon = new kakao.maps.LatLng(point.lat, point.lng);
             map.setCenter(moveLatLon);
             map.setLevel(4);
@@ -294,7 +325,6 @@
             currentMarker.setMap(map);
         }
 
-        // 폼 초기화
         function resetForm() {
             document.getElementById('edit-point-id').value = '';
             document.getElementById('point-name').value = '';
@@ -311,7 +341,6 @@
             if (currentMarker) currentMarker.setMap(null);
         }
 
-        // 포인트 목록 렌더링 및 마커 표시
         function renderPointList() {
             mapMarkers.forEach(m => m.setMap(null));
             mapMarkers = [];
@@ -335,10 +364,17 @@
                     map.setLevel(4);
                 });
 
-                // 히스토리 목록 생성
                 let historyHtml = '<div class="history-box"><b>🎣 히스토리</b>';
                 p.records.forEach(r => {
-                    historyHtml += `<div class="history-item"><span>📅 ${r.date}: ${r.memo}</span></div>`;
+                    historyHtml += `
+                        <div class="history-item">
+                            <div class="history-content">📅 <b>${r.date}</b>: ${r.memo}</div>
+                            <div class="history-btns" onclick="event.stopPropagation()">
+                                <button class="btn-small btn-edit" onclick="editRecord(${p.id}, ${r.id})">수정</button>
+                                <button class="btn-small btn-danger" onclick="deleteRecord(${p.id}, ${r.id})">삭제</button>
+                            </div>
+                        </div>
+                    `;
                 });
                 historyHtml += '</div>';
 
@@ -351,8 +387,8 @@
                             </div>
                             <div class="point-actions" onclick="event.stopPropagation()">
                                 <button class="btn-small btn-add-rec" onclick="quickAddRecord(${p.id})">＋기록</button>
-                                <button class="btn-small btn-edit" onclick="editPoint(${p.id})">수정</button>
-                                <button class="btn-small btn-danger" onclick="deletePoint(${p.id})">삭제</button>
+                                <button class="btn-small btn-edit" onclick="editPoint(${p.id})">정보수정</button>
+                                <button class="btn-small btn-danger" onclick="deletePoint(${p.id})">포인트삭제</button>
                             </div>
                         </div>
                         ${historyHtml}
@@ -363,18 +399,16 @@
             listContainer.innerHTML = html;
         }
 
-        // 지도 중심 이동
         function panToMap(lat, lng) {
             const moveLatLon = new kakao.maps.LatLng(lat, lng);
             map.setCenter(moveLatLon);
             map.setLevel(4);
         }
 
-        // 포인트 삭제
         function deletePoint(id) {
-            if (confirm("정말 이 포인트와 모든 조과 기록을 삭제하시겠습니까?")) {
+            if (confirm("정말 이 포인트와 모든 출조 히스토리를 삭제하시겠습니까?")) {
                 savedPoints = savedPoints.filter(p => p.id !== id);
-                localStorage.setItem('squid_points_v3', JSON.stringify(savedPoints));
+                localStorage.setItem('squid_points_v4', JSON.stringify(savedPoints));
                 resetForm();
                 renderPointList();
             }
