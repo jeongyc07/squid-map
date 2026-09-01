@@ -7,7 +7,7 @@
     <link rel="shortcut icon" href="#">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { width: 100%; height: 100%; font-family: 'Apple SD Gothic Neo', -apple-system, sans-serif; }
+        html, body { width: 100%; height: 100%; font-family: 'Apple SD Gothic Neo', sans-serif; }
         .main-container { display: flex; width: 100vw; height: 100vh; }
         
         #map { width: 67%; height: 100%; }
@@ -27,7 +27,7 @@
         .card h3 { font-size: 15px; color: #2c3e50; margin-bottom: 10px; border-bottom: 2px solid #3498db; padding-bottom: 5px; display: inline-block; }
         .info-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 14px; }
         
-        .wind-arrow { display: inline-block; font-size: 22px; font-weight: bold; color: #e74c3c; transition: transform 0.3s ease; }
+        .wind-arrow { display: inline-block; font-size: 24px; font-weight: bold; color: #e74c3c; transition: transform 0.3s ease; }
         .weather-badge { font-weight: bold; color: #2980b9; }
 
         .tide-list { list-style: none; margin-top: 8px; }
@@ -48,16 +48,14 @@
 <body>
 
     <div class="main-container">
-        <!-- 카카오 지도 영역 -->
         <div id="map"></div>
 
-        <!-- 우측 정보 패널 -->
         <div id="info-panel">
             <h2>🦑 무늬오징어 포인트 정보</h2>
             <p id="coords" class="sub-text">지도를 클릭하여 포인트를 지정하세요.</p>
             
             <div class="card">
-                <h3>☀️ 실시간 날씨 & 바람 (기상청)</h3>
+                <h3>☀️ 실시간 날씨 & 바람</h3>
                 <div class="info-row">
                     <span>날씨 상태</span>
                     <span id="weather-text" class="weather-badge">선택 대기</span>
@@ -85,9 +83,6 @@
     </div>
 
     <script>
-        const KMA_API_KEY = "88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f";
-        const KHOA_API_KEY = "88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f";
-
         document.addEventListener("DOMContentLoaded", function() {
             if (typeof kakao === 'undefined' || !kakao.maps) {
                 alert("카카오 지도 SDK 로드 실패!");
@@ -103,94 +98,95 @@
             const map = new kakao.maps.Map(mapContainer, mapOption);
             let marker = null;
 
-            // 지도 클릭 이벤트 핸들러
             kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
                 const latlng = mouseEvent.latLng;
                 const lat = latlng.getLat();
                 const lng = latlng.getLng();
 
-                // 기존 마커 제거 후 신규 마커 표시
                 if (marker) marker.setMap(null);
                 marker = new kakao.maps.Marker({ position: latlng });
                 marker.setMap(map);
 
                 document.getElementById('coords').innerText = `위도: ${lat.toFixed(4)} / 경도: ${lng.toFixed(4)}`;
 
-                // 1. 기상청 격자 좌표 변환 후 날씨/바람 데이터 조회
-                const grid = dfs_xy_conv("toXY", lat, lng);
-                getKmaWeatherData(grid.x, grid.y);
+                // 날씨 및 바람 가져오기 (Open-Meteo 글로벌 기상 엔진)
+                getWeatherData(lat, lng);
 
-                // 2. 해양조사원 물때 데이터 조회
+                // 물때 정보 가져오기 (CORS 우회 프록시 적용)
                 getTideData(lat, lng);
             });
         });
 
-        // 기상청 정시 기준시간 계산
-        function getBaseTime() {
-            const now = new Date();
-            if (now.getMinutes() < 40) {
-                now.setHours(now.getHours() - 1);
-            }
-            const year = now.getFullYear();
-            const month = ('0' + (now.getMonth() + 1)).slice(-2);
-            const day = ('0' + now.getDate()).slice(-2);
-            const hours = ('0' + now.getHours()).slice(-2) + '00';
-            return { baseDate: `${year}${month}${day}`, baseTime: hours };
-        }
-
-        // 기상청 초단기실황 API 호출
-        function getKmaWeatherData(nx, ny) {
-            const { baseDate, baseTime } = getBaseTime();
-            const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst?serviceKey=${KMA_API_KEY}&pageNo=1&numOfRows=100&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${nx}&ny=${ny}`;
+        // 1. 실시간 날씨 & 바람 API (Open-Meteo)
+        function getWeatherData(lat, lng) {
+            document.getElementById('weather-text').innerText = "조회 중...";
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`;
 
             fetch(url)
                 .then(res => res.json())
                 .then(data => {
-                    if (!data.response || !data.response.body || !data.response.body.items) {
+                    if (!data.current_weather) {
                         document.getElementById('weather-text').innerText = "데이터 없음";
                         return;
                     }
-                    const items = data.response.body.items.item;
-                    let vec = 0, wsd = 0, pty = 0;
 
-                    items.forEach(item => {
-                        if (item.category === "WSD") wsd = item.obsrValue; // 풍속 (m/s)
-                        if (item.category === "VEC") vec = item.obsrValue; // 풍향 (deg)
-                        if (item.category === "PTY") pty = item.obsrValue; // 강수형태
-                    });
-
-                    document.getElementById('wind-speed').innerText = wsd;
-                    document.getElementById('wind-deg').innerText = `(${vec}°)`;
-                    document.getElementById('wind-arrow').style.transform = `rotate(${vec}deg)`;
+                    const cw = data.current_weather;
+                    const windSpeed = (cw.windspeed * 0.277778).toFixed(1); // km/h -> m/s 변환
+                    const windDegree = cw.winddirection;
                     
-                    const weatherIcons = { "0": "☀️ 맑음", "1": "🌧️ 비", "2": "🌧️❄️ 비/눈", "3": "❄️ 눈", "5": "🌦️ 빗방울" };
-                    document.getElementById('weather-text').innerText = weatherIcons[pty] || "☀️ 맑음";
+                    // 바람 정보 업데이트
+                    document.getElementById('wind-speed').innerText = windSpeed;
+                    document.getElementById('wind-deg').innerText = `(${windDegree}°)`;
+                    // 풍향 화살표 회전 (바람이 불어가는 방향 표시)
+                    document.getElementById('wind-arrow').style.transform = `rotate(${windDegree}deg)`;
+                    
+                    // WMO 날씨 코드 해석
+                    const weatherStatus = parseWmoCode(cw.weathercode);
+                    document.getElementById('weather-text').innerText = weatherStatus;
                 })
                 .catch(err => {
-                    console.error("기상청 API 오류:", err);
+                    console.error("날씨 API 오류:", err);
                     document.getElementById('weather-text').innerText = "조회 실패";
                 });
         }
 
-        // 해양조사원 물때 API 호출 (제주 관측소 DT_0013 예시)
+        // WMO 날씨 코드 변환 함수
+        function parseWmoCode(code) {
+            if (code === 0) return "☀️ 맑음";
+            if (code >= 1 && code <= 3) return "⛅ 구름 조금/흐림";
+            if (code >= 45 && code <= 48) return "🌫️ 안개";
+            if (code >= 51 && code <= 67) return "🌧️ 이슬비/비";
+            if (code >= 71 && code <= 77) return "❄️ 눈";
+            if (code >= 80 && code <= 82) return "소나기";
+            if (code >= 95) return "🌩️ 뇌우";
+            return "☀️ 맑음";
+        }
+
+        // 2. 물때 정보 (해양조사원 API + CORS 프록시)
         function getTideData(lat, lng) {
+            const tideContainer = document.getElementById('tide-container');
+            tideContainer.innerHTML = "<p style='font-size:13px; color:#888;'>물때 정보를 불러오는 중...</p>";
+
             const today = new Date();
             const year = today.getFullYear();
             const month = ('0' + (today.getMonth() + 1)).slice(-2);
             const day = ('0' + today.getDate()).slice(-2);
             const dateStr = `${year}${month}${day}`;
 
-            const obsCode = "DT_0013"; // 제주 관측소 코드
-            const url = `https://www.khoa.go.kr/api/oceangrid/tideObsPreTab/search.do?ServiceKey=${KHOA_API_KEY}&ObsCode=${obsCode}&Date=${dateStr}&ResultType=json`;
+            // 제주 서귀포 관측소 (DT_0013) 기본 지정
+            const apiKey = "88067ec3801cdbebdbaf54ae86c187b740af50cf7b3de5d151ba7832480ac13f";
+            const targetUrl = `https://www.khoa.go.kr/api/oceangrid/tideObsPreTab/search.do?ServiceKey=${apiKey}&ObsCode=DT_0013&Date=${dateStr}&ResultType=json`;
+            
+            // CORS 에러 방지를 위한 AllOrigins 프록시 거치기
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
 
-            fetch(url)
+            fetch(proxyUrl)
                 .then(res => res.json())
                 .then(data => {
-                    const tideContainer = document.getElementById('tide-container');
-                    
-                    if (data && data.result && data.result.data) {
+                    const parsedData = JSON.parse(data.contents);
+                    if (parsedData && parsedData.result && parsedData.result.data) {
                         let html = '<ul class="tide-list">';
-                        data.result.data.forEach(item => {
+                        parsedData.result.data.forEach(item => {
                             const isHigh = item.hl_type.includes("고조") || item.hl_type.includes("만조");
                             const typeClass = isHigh ? "tide-high" : "tide-low";
                             const typeName = isHigh ? "▲ 만조" : "▼ 간조";
@@ -207,39 +203,13 @@
                         html += '</ul>';
                         tideContainer.innerHTML = html;
                     } else {
-                        tideContainer.innerHTML = "<p style='font-size:13px; color:#888;'>조석 정보를 찾을 수 없습니다.</p>";
+                        tideContainer.innerHTML = "<p style='font-size:13px; color:#888;'>해당 날짜의 조석 데이터를 찾을 수 없습니다.</p>";
                     }
                 })
                 .catch(err => {
-                    console.error("해양조사원 API 오류:", err);
-                    document.getElementById('tide-container').innerHTML = "<p style='font-size:13px; color:#e74c3c;'>물때 정보를 불러오지 못했습니다.</p>";
+                    console.error("물때 API 오류:", err);
+                    tideContainer.innerHTML = "<p style='font-size:13px; color:#e74c3c;'>물때 정보 수신 실패 (CORS 제한)</p>";
                 });
-        }
-
-        // 위경도 -> 기상청 격자 좌표(X, Y) 변환 함수
-        function dfs_xy_conv(code, v1, v2) {
-            const RE = 6371.00877, GRID = 5.0, SLAT1 = 30.0, SLAT2 = 60.0, OLON = 126.0, OLAT = 38.0, XO = 43, YO = 136;
-            const DEGRAD = Math.PI / 180.0;
-            const re = RE / GRID, slat1 = SLAT1 * DEGRAD, slat2 = SLAT2 * DEGRAD, olon = OLON * DEGRAD, olat = OLAT * DEGRAD;
-            let sn = Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5);
-            sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(sn);
-            let sf = Math.tan(Math.PI * 0.25 + slat1 * 0.5);
-            sf = Math.pow(sf, sn) * Math.cos(slat1) / sn;
-            let ro = Math.tan(Math.PI * 0.25 + olat * 0.5);
-            ro = re * sf / Math.pow(ro, sn);
-            const rs = {};
-            if (code == "toXY") {
-                rs['lat'] = v1; rs['lng'] = v2;
-                let ra = Math.tan(Math.PI * 0.25 + (v1) * DEGRAD * 0.5);
-                ra = re * sf / Math.pow(ra, sn);
-                let theta = v2 * DEGRAD - olon;
-                if (theta > Math.PI) theta -= 2.0 * Math.PI;
-                if (theta < -Math.PI) theta += 2.0 * Math.PI;
-                theta *= sn;
-                rs['x'] = Math.floor(ra * Math.sin(theta) + XO + 0.5);
-                rs['y'] = Math.floor(ro - ra * Math.cos(theta) + YO + 0.5);
-            }
-            return rs;
         }
     </script>
 </body>
